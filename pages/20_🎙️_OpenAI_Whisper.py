@@ -11,6 +11,7 @@ from langchain_community.document_loaders.generic import GenericLoader
 from langchain_community.document_loaders.parsers import OpenAIWhisperParser
 from langchain_community.callbacks import StreamlitCallbackHandler
 from langchain_core.output_parsers import StrOutputParser
+from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
 
 dotenv.load_dotenv()
 # Configure logging
@@ -27,7 +28,9 @@ if os.environ.get("OPENAI_API_KEY") is None:
 st.title("Transcribe an audio file using OpenAI's Whisper model")
 temp_dir = tempfile.gettempdir()
 
-
+# Azure Blob Storage configuration
+AZURE_CONNECTION_STRING = os.getenv("AZURE_CONNECTION_STRING")
+AZURE_CONTAINER_NAME = os.getenv("AZURE_CONTAINER_NAME")
 
 # Initialize the transcription tool
 transcription_tool = OpenAIWhisperParser()
@@ -224,6 +227,34 @@ def verify_api_key():
         return False
     logging.info("OpenAI API key verified")
     return True
+
+
+def upload_to_azure(file):
+    try:
+        blob_service_client = BlobServiceClient.from_connection_string(AZURE_CONNECTION_STRING)
+        blob_client = blob_service_client.get_blob_client(container=AZURE_CONTAINER_NAME, blob=file.name)
+        
+        with st.spinner("Uploading to Azure..."):
+            blob_client.upload_blob(file, overwrite=True)
+        
+        st.success("File uploaded successfully!")
+        return True
+    except Exception as e:
+        st.error(f"Error uploading file: {e}")
+        return False
+
+
+def handle_file_upload(file):
+    if file.size > 50 * 1024 * 1024:  # 50 MB limit
+        st.error("File size exceeds the 50 MB limit.")
+        return
+    
+    if file.type not in ["audio/mpeg", "audio/wav", "audio/x-m4a"]:
+        st.error("Unsupported file format. Please upload MP3, WAV, or M4A files.")
+        return
+    
+    if upload_to_azure(file):
+        st.success("You'll receive a Google Drive share notification when the transcript is ready.")
 
 
 # Modify transcribe_upload function
