@@ -13,6 +13,7 @@ dependencies = [
     "langchain-openai>=0.3.4",
     "langchain-community>=0.3.17",
     "watchdog>=6.0.0",
+    "azure-storage-blob>=12.8.0",
 ]
 
 [build-system]
