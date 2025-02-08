@@ -1,0 +1,25 @@
+[project]
+name = "classroom-transcripts"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "assemblyai>=0.37.0",
+    "python-dotenv>=1.0.1",
+    "streamlit>=1.42.0",
+    "pydub>=0.25.1",
+    "langchain>=0.3.18",
+    "langchain-openai>=0.3.4",
+    "langchain-community>=0.3.17",
+    "watchdog>=6.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = [
+    "watchdog>=6.0.0",
+]
