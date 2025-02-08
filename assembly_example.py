@@ -22,11 +22,10 @@ audio_url = "data/short-classroom-sample.m4a"
 
 # this step adds speaker labels, diarization, we want to add timestamps, and PII Redaction
 
-config = aai.TranscriptionConfig(speaker_labels=True).set_redact_pii(
+config = aai.TranscriptionConfig(speaker_labels=True, timestamps=True).set_redact_pii(
     policies=[
         aai.PIIRedactionPolicy.person_name,
         aai.PIIRedactionPolicy.organization,
-        aai.PIIRedactionPolicy.occupation,
     ],
     substitution=aai.PIISubstitutionPolicy.hash,
 )
@@ -40,18 +39,6 @@ if transcript.status == aai.TranscriptStatus.error:
     exit(1)
 
 # we need to work on formatting here
-print(transcript.text)
-
-# for utterance in transcript.utterances:
-#     print(f"Speaker {utterance.speaker}: {utterance.text}")
-
-# this is where you change out the LLM you're using, for example
-# Claude 3.5 Sonnet
-# Claude 3 Opus
-# Claude 3 Haiku
-# Claude 3 Sonnet
-
-# this is an LLM prompt request, and not a direct request to AssemblyAI
-# prompt = "Provide a timestamped, diarized version of the transcript."
-
-# result = transcript.lemur.task(prompt, final_model=aai.LemurModel.claude3_5_sonnet)
+for utterance in transcript.utterances:
+    timestamp = utterance.start_time.strftime("%H:%M:%S")
+    print(f"{timestamp} - Speaker {utterance.speaker}: {utterance.text}")
