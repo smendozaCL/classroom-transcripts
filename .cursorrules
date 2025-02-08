@@ -1,0 +1,2 @@
+- Use SAS instead of connection strings for Azure Storage
+- define env variables in .env.example

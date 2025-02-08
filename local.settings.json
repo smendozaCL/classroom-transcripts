@@ -1,0 +1,9 @@
+{
+    "IsEncrypted": false,
+    "Values": {
+        "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+        "FUNCTIONS_WORKER_RUNTIME": "python",
+        "ASSEMBLYAI_API_KEY": "",
+        "AZURE_STORAGE_CONNECTION_STRING": ""
+    }
+} 

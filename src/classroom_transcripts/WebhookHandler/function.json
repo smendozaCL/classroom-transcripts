@@ -1,0 +1,21 @@
+{
+    "scriptFile": "../transcription_function.py",
+    "entryPoint": "handle_webhook",
+    "bindings": [
+        {
+            "authLevel": "function",
+            "type": "httpTrigger",
+            "direction": "in",
+            "name": "req",
+            "methods": [
+                "post"
+            ],
+            "route": "webhook"
+        },
+        {
+            "type": "http",
+            "direction": "out",
+            "name": "$return"
+        }
+    ]
+}

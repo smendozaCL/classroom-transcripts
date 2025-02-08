@@ -1,0 +1,18 @@
+{
+    "IsEncrypted": false,
+    "Values": {
+        "FUNCTIONS_WORKER_RUNTIME": "python",
+        "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+        "AZURE_STORAGE_CONNECTION_STRING": "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;",
+        "ASSEMBLYAI_API_KEY": "97479be435e843419758b6d264bdf17e",
+        "AZURE_STORAGE_SAS_URL": "http://127.0.0.1:10000/devstoreaccount1/uploads?sv=2018-03-28&st=2025-02-08T20%3A53%3A46Z&se=2025-02-09T20%3A53%3A46Z&sr=c&sp=rcl&sig=8RtU5Wi0XsXYVxAgD%2BUqNvaA42aKQrilpcdVkyJrVGo%3D",
+        "AZURE_STORAGE_TARGET_SAS_URL": "http://127.0.0.1:10000/devstoreaccount1/transcriptions?sv=2018-03-28&st=2025-02-08T20%3A52%3A45Z&se=2025-02-09T20%3A52%3A45Z&sr=c&sp=rcl&sig=ePQV1c1ynGDsr64sgDPKv0pSBHYvbnjhLI%2FjeiaPGBY%3D",
+        "AZURE_FUNCTION_KEY": "local",
+        "WEBSITE_HOSTNAME": "localhost:7072"
+    },
+    "Host": {
+        "LocalHttpPort": 7072,
+        "CORS": "*",
+        "CORSCredentials": false
+    }
+}

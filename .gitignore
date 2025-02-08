@@ -20,9 +20,13 @@ build/
 
 # IDE
 .idea/
-.vscode/
+
 *.swp
 *.swo
 
 .env.local
 .streamlit/secrets.toml
+
+.python_packages
+
+.azurite
