@@ -42,8 +42,8 @@ if transcript.status == aai.TranscriptStatus.error:
 # we need to work on formatting here
 print(transcript.text)
 
-for utterance in transcript.utterances:
-    print(f"Speaker {utterance.speaker}: {utterance.text}")
+# for utterance in transcript.utterances:
+#     print(f"Speaker {utterance.speaker}: {utterance.text}")
 
 # this is where you change out the LLM you're using, for example
 # Claude 3.5 Sonnet
@@ -52,6 +52,6 @@ for utterance in transcript.utterances:
 # Claude 3 Sonnet
 
 # this is an LLM prompt request, and not a direct request to AssemblyAI
-prompt = "Provide a timestamped, diarized version of the transcript."
+# prompt = "Provide a timestamped, diarized version of the transcript."
 
-result = transcript.lemur.task(prompt, final_model=aai.LemurModel.claude3_5_sonnet)
+# result = transcript.lemur.task(prompt, final_model=aai.LemurModel.claude3_5_sonnet)
