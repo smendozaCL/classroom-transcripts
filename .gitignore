@@ -24,6 +24,5 @@ build/
 *.swp
 *.swo
 
-# Existing code...
 .env.local
 .streamlit/secrets.toml
