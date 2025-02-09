@@ -1,0 +1,8 @@
+- Use azure-identity and managed identity for Azure resources
+- define env variables in .env.example
+- Use Azure CLI Reference to correctly format commands
+- Use AssemblyAI API Reference to correctly format requests
+- Use Github Actions Reference for workflow syntax
+- Query App Insights for errors and metrics: ```az monitor app-insights query --app classroom-transcripts-func --analytics-query "traces | where timestamp > ago(5m) and severityLevel >= 2 | project timestamp, message, severityLevel" --resource-group classroom-transcripts-rg```
+- to generate a secrets file from onepassword references, use `op inject --in-file .env.onepassword --out-file .env`
+- to generate a requirements.txt file from pyproject.toml, use `uv pip compile pyproject.toml -o requirements.txt`
