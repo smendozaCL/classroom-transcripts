@@ -1,3 +1,5 @@
+"""Global test fixtures and configuration."""
+
 import os
 import pytest
 import logging
@@ -8,9 +10,17 @@ from azure.core.exceptions import AzureError
 from dotenv import load_dotenv
 import assemblyai as aai
 from .test_logging import setup_test_logging, log_test_result, log_resource_cleanup
+from .fixtures.fixtures import (
+    get_assemblyai_completed_response,
+    get_assemblyai_error_response,
+    get_azure_storage_response,
+    get_test_audio_path,
+    get_invalid_audio_path,
+    get_empty_audio_path,
+)
 
 # Load environment variables
-load_dotenv(".env.local")
+load_dotenv(".env")
 
 # Set up logging for all tests
 log_file = setup_test_logging()
@@ -85,11 +95,9 @@ def test_containers(blob_service_client):
     for container in created:
         try:
             container.delete_container()
-            log_resource_cleanup(logger, "container", container.container_name)
+            log_resource_cleanup("container", container.container_name)
         except Exception as e:
-            log_resource_cleanup(
-                logger, "container", container.container_name, success=False
-            )
+            log_resource_cleanup("container", container.container_name)
             logger.warning(
                 f"Failed to delete container {container.container_name}: {str(e)}"
             )
@@ -115,15 +123,44 @@ def assemblyai_client():
         pytest.skip("AssemblyAI client initialization failed")
 
 
+# Test Data Fixtures
+@pytest.fixture
+def assemblyai_completed():
+    """Get sample completed AssemblyAI response."""
+    return get_assemblyai_completed_response()
+
+
+@pytest.fixture
+def assemblyai_error():
+    """Get sample error AssemblyAI response."""
+    return get_assemblyai_error_response()
+
+
+@pytest.fixture
+def azure_storage_data():
+    """Get sample Azure Storage response."""
+    return get_azure_storage_response()
+
+
 @pytest.fixture
 def test_audio_file():
     """Get the test audio file path."""
-    test_file = Path("data/short-classroom-sample.m4a")
-    if not test_file.exists():
-        logger.error(f"Test file not found at {test_file}")
-        pytest.skip(f"Test file not found at {test_file}")
-    logger.info(f"Using test audio file: {test_file}")
-    return test_file
+    audio_path = get_test_audio_path()
+    if not audio_path.exists():
+        pytest.skip(f"Test audio file not found at {audio_path}")
+    return audio_path
+
+
+@pytest.fixture
+def invalid_audio_file():
+    """Get the invalid test audio file path."""
+    return get_invalid_audio_path()
+
+
+@pytest.fixture
+def empty_audio_file():
+    """Get the empty test audio file path."""
+    return get_empty_audio_path()
 
 
 @pytest.fixture

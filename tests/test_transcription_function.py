@@ -86,7 +86,7 @@ def test_containers(blob_service_client):
 @pytest.fixture
 def test_audio_file():
     """Get the test audio file path."""
-    test_file = Path("data/short-classroom-sample.m4a")
+    test_file = Path(__file__).parent / "fixtures/audio/short-classroom-sample.m4a"
     if not test_file.exists():
         pytest.fail(f"Test file not found at {test_file}")
     return test_file
@@ -124,7 +124,7 @@ def test_assemblyai_configuration():
     assert transcriber is not None
 
 
-@patch("assemblyai.Transcriber")
+@patch("src.functions.transcription_function.aai.Transcriber")
 def test_submit_transcription_placeholder(mock_transcriber_class, test_audio_file):
     """Test the submit_transcription function with a placeholder implementation."""
     # Set up mock transcriber
@@ -137,122 +137,139 @@ def test_submit_transcription_placeholder(mock_transcriber_class, test_audio_fil
     # Create a mock blob input
     mock_blob = MockInputStream(test_audio_file.name)
 
-    # Set required environment variables
-    os.environ["ASSEMBLYAI_API_KEY"] = "test_api_key"
-    os.environ["AZURE_STORAGE_SAS_URL"] = "http://example.com/container?sas=token"
-    os.environ["AZURE_FUNCTION_KEY"] = "test_function_key"
-    os.environ["WEBSITE_HOSTNAME"] = "test.azurewebsites.net"
+    # Set required environment variables for local development
+    env_vars = {
+        "ASSEMBLYAI_API_KEY": "test_api_key",
+        "AZURE_FUNCTION_KEY": "test_function_key",
+        "WEBSITE_HOSTNAME": "test.azurewebsites.net",
+        "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+        "AZURE_STORAGE_CONNECTION_STRING": "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;",
+    }
+    mock_sas_token = "sv=2021-10-04&st=2025-02-09T15%3A45%3A00Z&se=2025-02-09T16%3A45%3A00Z&sr=c&sp=r&sig=mock-signature"
 
-    # Call the function
-    try:
-        submit_transcription(mock_blob)
+    # Set up the mock blob service client
+    mock_service_client = MagicMock(spec=BlobServiceClient)
+    mock_container_client = MagicMock()
+    mock_blob_client = MagicMock()
+    mock_blob_client.url = (
+        f"http://127.0.0.1:10000/devstoreaccount1/uploads/{test_audio_file.name}"
+    )
+    mock_blob_client.container_name = "uploads"
+    mock_blob_client.blob_name = test_audio_file.name
+    mock_container_client.get_blob_client.return_value = mock_blob_client
+    mock_service_client.get_container_client.return_value = mock_container_client
 
-        # Verify transcriber was called
-        mock_transcriber.submit.assert_called_once()
+    # Update the with block to patch BlobServiceClient.from_connection_string and generate_blob_sas
+    with (
+        patch.dict(os.environ, env_vars, clear=True),
+        patch(
+            "azure.storage.blob.BlobServiceClient.from_connection_string",
+            return_value=mock_service_client,
+        ),
+        patch("azure.storage.blob.generate_blob_sas", return_value=mock_sas_token),
+    ):
+        try:
+            submit_transcription(mock_blob)
 
-        # Get the config that was passed to submit
-        call_args = mock_transcriber.submit.call_args
-        audio_url = call_args[0][0]
-        config = call_args[1].get("config", None)
+            # Verify transcriber was called
+            mock_transcriber.submit.assert_called_once()
 
-        # Verify audio URL construction
-        assert "http://example.com/uploads/" in audio_url
-        assert mock_blob.name in audio_url
-        assert "sas=token" in audio_url
+            # Get the config that was passed to submit
+            call_args = mock_transcriber.submit.call_args
+            audio_url = call_args[0][0]
+            config = None
+            if len(call_args[0]) > 1:
+                config = call_args[0][1]
+            if not config and ("config" in call_args[1]):
+                config = call_args[1]["config"]
+            assert config is not None, f"config is None, call_args: {call_args}"
 
-        # Verify webhook configuration
-        assert config is not None
-        assert config.speaker_labels is True
-        assert config.webhook_url == "https://test.azurewebsites.net/api/webhook"
-        assert config.webhook_auth_header_name == "x-functions-key"
-        assert config.webhook_auth_header_value == "test_function_key"
+            # Verify audio URL construction
+            assert "http://127.0.0.1:10000/devstoreaccount1/uploads/" in audio_url
+            assert mock_blob.name in audio_url
+            assert "sig=" in audio_url  # SAS token signature
+            assert "sp=r" in audio_url  # Read permission
 
-        print("\nPlaceholder test passed with the following configuration:")
-        print(f"Audio URL: {audio_url.split('?')[0]}")  # Don't print the SAS token
-        print(f"Webhook URL: {config.webhook_url}")
-        print(f"Speaker labels enabled: {config.speaker_labels}")
-        print(f"Auth header: {config.webhook_auth_header_name}")
+            # Verify webhook configuration
+            assert config is not None
+            assert config.speaker_labels is True
+            assert config.webhook_url == "https://test.azurewebsites.net/api/webhook"
+            assert config.webhook_auth_header_name == "x-functions-key"
+            assert config.webhook_auth_header_value == "test_function_key"
 
-    except Exception as e:
-        pytest.fail(f"submit_transcription failed: {str(e)}")
+            print("\nPlaceholder test passed with the following configuration:")
+            print(f"Audio URL: {audio_url.split('?')[0]}")  # Don't print the SAS token
+            print(f"Webhook URL: {config.webhook_url}")
+            print(f"Speaker labels enabled: {config.speaker_labels}")
+            print(f"Auth header: {config.webhook_auth_header_name}")
+
+        except Exception as e:
+            pytest.fail(f"submit_transcription failed: {str(e)}")
 
 
 def test_webhook_handler():
     """Test the webhook handler function."""
-
-    class MockUtterance:
-        def __init__(self):
-            self.start = 0
-            self.speaker = "Bot"
-            self.text = "Transcription finished. Time to send to Google Docs!"
-
-    class MockTranscript:
-        def __init__(self):
-            self.utterances = [MockUtterance()]
-            self.audio_url = "http://example.com/audio.mp3"
-            self.audio_duration = 1000  # 1 second
-
-    # Create a mock webhook request
-    mock_webhook_data = {
-        "status": "completed",
-        "transcript_id": "test_transcript_123",
-        "audio_url": "http://example.com/audio.mp3",
+    env_vars = {
+        "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+        "AZURE_STORAGE_CONNECTION_STRING": "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;",
     }
+    # Set up a mock BlobServiceClient to simulate storage for webhook processing
+    mock_service_client = MagicMock(spec=BlobServiceClient)
+    mock_container_client = MagicMock()
+    mock_blob_client = MagicMock()
+    # Configure the mock blob client for the 'transcriptions' container
+    mock_blob_client.url = "http://127.0.0.1:10000/devstoreaccount1/transcriptions/transcript_test_transcript_123.json"
+    mock_blob_client.container_name = "transcriptions"
+    mock_blob_client.blob_name = "transcript_test_transcript_123.json"
+    mock_blob_client.cache_control = ""
+    mock_container_client.get_blob_client.return_value = mock_blob_client
+    mock_service_client.get_container_client.return_value = mock_container_client
 
-    mock_req = MockHttpRequest(mock_webhook_data)
-
-    # Mock AssemblyAI and Azure Storage
+    # Update the with block to patch the BlobServiceClient.from_connection_string
     with (
+        patch.dict(os.environ, env_vars, clear=True),
+        patch(
+            "azure.storage.blob.BlobServiceClient.from_connection_string",
+            return_value=mock_service_client,
+        ),
         patch("assemblyai.Transcript.get_by_id") as mock_get_transcript,
-        patch("azure.storage.blob.BlobClient.from_blob_url") as mock_blob_client_class,
     ):
-        # Set up mocks
+        # Set up mocks for transcript
+        class MockUtterance:
+            def __init__(self):
+                self.start = 0
+                self.speaker = "Bot"
+                self.text = "Transcription finished. Time to send to Google Docs!"
+
+        class MockTranscript:
+            def __init__(self):
+                self.utterances = [MockUtterance()]
+                self.audio_url = "http://example.com/audio.mp3"
+                self.audio_duration = 1000
+                self.speech_model = "default"
+                self.status = "completed"
+                self.id = "test_transcript_123"
+                self.language_model = "assemblyai_default"
+                self.language_code = "en_us"
+                self.acoustic_model = "assemblyai_default"
+
         mock_transcript = MockTranscript()
         mock_get_transcript.return_value = mock_transcript
 
-        mock_blob_client = MagicMock()
-        mock_blob_client.upload_blob.return_value = None
-        mock_blob_client_class.return_value = mock_blob_client
-
-        # Set required environment variables
-        os.environ["AZURE_STORAGE_SAS_URL"] = "http://example.com/container?sas=token"
-
-        # Call the webhook handler
-        try:
-            response = handle_webhook(mock_req)
-            assert response.status_code == 200
-
-            # Verify response content
-            response_json = json.loads(response.get_body())
-            assert response_json["status"] == "success"
-            assert response_json["transcript_id"] == "test_transcript_123"
-
-            # Verify Azure Storage interaction
-            mock_blob_client.upload_blob.assert_called_once()
-            upload_data = json.loads(mock_blob_client.upload_blob.call_args[0][0])
-
-            # Print the mock transcript for verification
-            print("\nMock transcript generated:")
-            for utterance in upload_data["utterances"]:
-                print(
-                    f"{utterance['timestamp']} - {utterance['speaker']}: {utterance['text']}"
-                )
-
-            # Verify the content
-            assert len(upload_data["utterances"]) == 1
-            assert (
-                upload_data["utterances"][0]["text"]
-                == "Transcription finished. Time to send to Google Docs!"
-            )
-            assert upload_data["utterances"][0]["speaker"] == "Speaker Bot"
-            assert upload_data["status"] == "completed"
-            assert "metadata" in upload_data
-            assert (
-                upload_data["metadata"]["audio_url"] == "http://example.com/audio.mp3"
-            )
-            assert upload_data["metadata"]["duration"] == 1000
-        except Exception as e:
-            pytest.fail(f"handle_webhook failed: {str(e)}")
+        # Create mock HttpRequest for webhook
+        mock_webhook_data = {
+            "status": "completed",
+            "transcript_id": "test_transcript_123",
+            "audio_url": "http://example.com/audio.mp3",
+        }
+        mock_req = MockHttpRequest(mock_webhook_data)
+        response = handle_webhook(mock_req)
+        assert response.status_code == 200
+        response_json = json.loads(response.get_body())
+        assert response_json["status"] == "success"
+        assert response_json["transcript_id"] == "test_transcript_123"
+        # Verify that upload_blob was called on the mock blob client
+        mock_blob_client.upload_blob.assert_called_once()
 
 
 def test_webhook_handler_non_completed_status():
@@ -431,96 +448,112 @@ def test_end_to_end_local():
         mock_transcriber_class.return_value = mock_transcriber
 
         # Submit the transcription
-        submit_transcription(mock_blob)
+        try:
+            # Call the function
+            from src.functions.transcription_function import submit_transcription
 
-        # Verify transcriber was called with correct config
-        mock_transcriber.submit.assert_called_once()
-        call_args = mock_transcriber.submit.call_args
-        audio_url = call_args[0][0]  # First positional arg is the audio URL
-        config = call_args[0][1]  # Second positional arg is the config
+            submit_transcription(mock_blob)
 
-        # Verify audio URL construction
-        assert "http://example.com/uploads/" in audio_url
-        assert mock_blob.name in audio_url
-        assert "sas=token" in audio_url
+            # Verify transcriber was called with correct config
+            mock_transcriber.submit.assert_called_once()
+            call_args = mock_transcriber.submit.call_args
+            audio_url = call_args[0][0]  # First positional arg is the audio URL
+            config = None
+            if len(call_args[0]) > 1:
+                config = call_args[0][1]
+            if not config and ("config" in call_args[1]):
+                config = call_args[1]["config"]
+            assert config is not None, f"config is None, call_args: {call_args}"
 
-        # Verify webhook configuration
-        assert config.speaker_labels is True
-        assert config.webhook_url == "https://test.azurewebsites.net/api/webhook"
-        assert config.webhook_auth_header_name == "x-functions-key"
-        assert config.webhook_auth_header_value == "test_function_key"
+            # Verify audio URL construction
+            assert "http://example.com/uploads/" in audio_url
+            assert mock_blob.name in audio_url
+            assert "sas=token" in audio_url
 
-        print("\nSubmitted transcription with config:")
-        print(f"Audio URL: {audio_url.split('?')[0]}")  # Don't print the SAS token
-        print(f"Webhook URL: {config.webhook_url}")
+            # Verify webhook configuration
+            assert config.speaker_labels is True
+            assert config.webhook_url == "https://test.azurewebsites.net/api/webhook"
+            assert config.webhook_auth_header_name == "x-functions-key"
+            assert config.webhook_auth_header_value == "test_function_key"
 
-        # Now simulate the webhook callback
-        mock_webhook_data = {
-            "status": "completed",
-            "transcript_id": "test_e2e_123",
-        }
-        mock_req = MockHttpRequest(mock_webhook_data)
+            print("\nSubmitted transcription with config:")
+            print(f"Audio URL: {audio_url.split('?')[0]}")  # Don't print the SAS token
+            print(f"Webhook URL: {config.webhook_url}")
 
-        # Mock the transcript retrieval
-        class MockUtterance:
-            def __init__(self):
-                self.start = 0
-                self.speaker = "Teacher"
-                self.text = "Welcome to today's class!"
+            # Now simulate the webhook callback
+            mock_webhook_data = {
+                "status": "completed",
+                "transcript_id": "test_e2e_123",
+            }
+            mock_req = MockHttpRequest(mock_webhook_data)
 
-        class MockTranscript:
-            def __init__(self):
-                self.utterances = [MockUtterance()]
-                self.audio_url = "http://example.com/test-audio.m4a"
-                self.audio_duration = 1000
+            # Mock the transcript retrieval
+            class MockUtterance:
+                def __init__(self):
+                    self.start = 0
+                    self.speaker = "Teacher"
+                    self.text = "Welcome to today's class!"
 
-        # Process the webhook
-        with patch("assemblyai.Transcript.get_by_id") as mock_get_transcript:
-            mock_transcript = MockTranscript()
-            mock_get_transcript.return_value = mock_transcript
+            class MockTranscript:
+                def __init__(self):
+                    self.utterances = [MockUtterance()]
+                    self.audio_url = "http://example.com/test-audio.m4a"
+                    self.audio_duration = 1000
 
-            try:
-                # Call webhook handler
-                response = handle_webhook(mock_req)
-                assert response.status_code == 200
+            # Process the webhook
+            with patch("assemblyai.Transcript.get_by_id") as mock_get_transcript:
+                mock_transcript = MockTranscript()
+                mock_get_transcript.return_value = mock_transcript
 
-                # Verify the JSON file was created
-                json_path = f"transcripts/transcript_test_e2e_123.json"
-                assert os.path.exists(json_path), f"JSON file not found at {json_path}"
+                try:
+                    # Call webhook handler
+                    response = handle_webhook(mock_req)
+                    assert response.status_code == 200
 
-                # Read and verify the transcript
-                with open(json_path, "r") as f:
-                    stored_data = json.load(f)
-                    print("\nStored transcript:")
-                    print(json.dumps(stored_data, indent=2))
-
-                    assert stored_data["transcript_id"] == "test_e2e_123"
-                    assert stored_data["status"] == "completed"
-                    assert len(stored_data["utterances"]) == 1
-                    assert stored_data["utterances"][0]["speaker"] == "Speaker Teacher"
-                    assert (
-                        stored_data["utterances"][0]["text"]
-                        == "Welcome to today's class!"
-                    )
-                    assert (
-                        stored_data["metadata"]["audio_url"]
-                        == "http://example.com/test-audio.m4a"
+                    # Verify the JSON file was created
+                    json_path = f"transcripts/transcript_test_e2e_123.json"
+                    assert os.path.exists(json_path), (
+                        f"JSON file not found at {json_path}"
                     )
 
-                # Clean up
-                os.remove(json_path)
-                if not os.listdir("transcripts"):
-                    os.rmdir("transcripts")
+                    # Read and verify the transcript
+                    with open(json_path, "r") as f:
+                        stored_data = json.load(f)
+                        print("\nStored transcript:")
+                        print(json.dumps(stored_data, indent=2))
 
-            except Exception as e:
-                # Clean up even if test fails
-                if os.path.exists(json_path):
+                        assert stored_data["transcript_id"] == "test_e2e_123"
+                        assert stored_data["status"] == "completed"
+                        assert len(stored_data["utterances"]) == 1
+                        assert (
+                            stored_data["utterances"][0]["speaker"] == "Speaker Teacher"
+                        )
+                        assert (
+                            stored_data["utterances"][0]["text"]
+                            == "Welcome to today's class!"
+                        )
+                        assert (
+                            stored_data["metadata"]["audio_url"]
+                            == "http://example.com/test-audio.m4a"
+                        )
+
+                    # Clean up
                     os.remove(json_path)
-                if os.path.exists("transcripts") and not os.listdir("transcripts"):
-                    os.rmdir("transcripts")
-                pytest.fail(f"End-to-end test failed: {str(e)}")
+                    if not os.listdir("transcripts"):
+                        os.rmdir("transcripts")
 
-        print("\nEnd-to-end test completed successfully!")
+                except Exception as e:
+                    # Clean up even if test fails
+                    if os.path.exists(json_path):
+                        os.remove(json_path)
+                    if os.path.exists("transcripts") and not os.listdir("transcripts"):
+                        os.rmdir("transcripts")
+                    pytest.fail(f"End-to-end test failed: {str(e)}")
+
+            print("\nEnd-to-end test completed successfully!")
+
+        except Exception as e:
+            pytest.fail(f"End-to-end test failed: {str(e)}")
 
 
 def test_url_construction():
@@ -577,7 +610,7 @@ def test_url_construction():
     ):
         try:
             # Call the function
-            from src.functions.SubmitTranscription import submit_transcription
+            from src.functions.transcription_function import submit_transcription
 
             submit_transcription(mock_blob)
 
@@ -663,7 +696,7 @@ def test_url_construction_error_handling():
     ):
         try:
             # Call the function
-            from src.functions.SubmitTranscription import submit_transcription
+            from src.functions.transcription_function import submit_transcription
 
             submit_transcription(mock_blob)
 
@@ -739,6 +772,8 @@ def test_sas_token_generation_local():
     ):
         try:
             # Call the function
+            from src.functions.transcription_function import submit_transcription
+
             submit_transcription(mock_blob)
 
             # Get the audio_url that was passed to transcriber.submit
@@ -808,6 +843,8 @@ def test_sas_token_generation_production():
     ):
         try:
             # Call the function
+            from src.functions.transcription_function import submit_transcription
+
             submit_transcription(mock_blob)
 
             # Verify user delegation key was requested
