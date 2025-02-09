@@ -62,20 +62,39 @@ def submit_transcription(myblob: func.InputStream):
 
         # Get the audio URL
         if is_local:
-            # For local development, use the blob URL directly
-            audio_url = blob_client.url
-            logging.info(f"Using local blob URL: {audio_url}")
+            # For local development, use connection string to get account key
+            account_key = connection_string.split("AccountKey=")[1].split(";")[0]
+            sas_token = generate_blob_sas(
+                account_name="devstoreaccount1",
+                container_name="uploads",
+                blob_name=clean_blob_name,
+                account_key=account_key,
+                permission=BlobSasPermissions(read=True),
+                expiry=datetime.utcnow() + timedelta(hours=1),
+            )
+            audio_url = f"{blob_client.url}?{sas_token}"
+            logging.info(
+                f"Using local blob URL with SAS: {blob_client.url} (token redacted)"
+            )
         else:
             # Generate SAS token for the blob with read permission
             logging.info(f"\n=== Generating SAS Token ===")
             logging.info(f"Blob: {clean_blob_name}")
             try:
+                # Get user delegation key when using Azure AD auth
+                user_delegation_key = blob_service_client.get_user_delegation_key(
+                    key_start_time=datetime.utcnow()
+                    - timedelta(
+                        minutes=5
+                    ),  # Start slightly in the past to avoid clock skew
+                    key_expiry_time=datetime.utcnow() + timedelta(hours=2),
+                )
+
                 sas_token = generate_blob_sas(
                     account_name=storage_account,
                     container_name="uploads",
                     blob_name=clean_blob_name,
-                    account_key=None,
-                    credential=credential,
+                    user_delegation_key=user_delegation_key,
                     permission=BlobSasPermissions(read=True),
                     expiry=datetime.utcnow() + timedelta(hours=1),
                 )
