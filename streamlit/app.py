@@ -1,12 +1,10 @@
 import streamlit as st
 from azure.storage.blob import BlobClient, BlobServiceClient
 from azure.identity import ClientSecretCredential
-from dotenv import load_dotenv
 import os
 import time
 import logging
 
-load_dotenv()
 
 st.set_page_config(
     page_title="Classroom Transcripts with eddo.ai",

@@ -86,7 +86,7 @@ def test_containers(blob_service_client):
 @pytest.fixture
 def test_audio_file():
     """Get the test audio file path."""
-    test_file = Path("data/short-classroom-sample.m4a")
+    test_file = Path("tests/data/audio/short-classroom-sample.m4a")
     if not test_file.exists():
         pytest.fail(f"Test file not found at {test_file}")
     return test_file

@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="session", autouse=True)
-def setup_logging():
-    """Set up logging for the test session."""
+def setup_test_session():
+    """Set up test session."""
     logger.info(f"Starting test session. Logs will be written to: {log_file}")
     yield
     logger.info("Test session completed.")
@@ -142,6 +142,14 @@ def mock_env(monkeypatch):
     return env_vars
 
 
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """Hook to capture test results."""
+    outcome = yield
+    rep = outcome.get_result()
+    setattr(item, f"rep_{rep.when}", rep)
+
+
 @pytest.fixture(autouse=True)
 def log_test_case(request):
     """Log the start and end of each test case."""
@@ -149,17 +157,10 @@ def log_test_case(request):
     logger.info(f"Starting test: {test_name}")
     yield
     # Log test result
-    if request.node.rep_call.passed:
-        log_test_result(logger, test_name, "PASS")
-    elif request.node.rep_call.failed:
-        log_test_result(logger, test_name, "FAIL", request.node.rep_call.longrepr)
-    elif request.node.rep_call.skipped:
-        log_test_result(logger, test_name, "SKIP")
-
-
-@pytest.hookimpl(tryfirst=True, hookwrapper=True)
-def pytest_runtest_makereport(item, call):
-    """Store test results for use in fixtures."""
-    outcome = yield
-    rep = outcome.get_result()
-    setattr(item, f"rep_{rep.when}", rep)
+    if hasattr(request.node, "rep_call"):
+        if request.node.rep_call.passed:
+            log_test_result(logger, test_name, "PASS")
+        elif request.node.rep_call.failed:
+            log_test_result(logger, test_name, "FAIL")
+        elif request.node.rep_call.skipped:
+            log_test_result(logger, test_name, "SKIP")

@@ -1,78 +1,35 @@
 import logging
-import sys
-from pathlib import Path
+import os
 from datetime import datetime
+from pathlib import Path
 
 
 def setup_test_logging():
-    """Configure logging for integration tests with detailed error tracking."""
+    """Set up logging configuration for tests"""
     # Create logs directory if it doesn't exist
-    log_dir = Path("logs")
-    log_dir.mkdir(exist_ok=True)
+    logs_dir = Path("logs")
+    logs_dir.mkdir(exist_ok=True)
 
-    # Create a unique log file for each test run
+    # Create log file with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = log_dir / f"integration_tests_{timestamp}.log"
+    log_file = logs_dir / f"integration_tests_{timestamp}.log"
 
-    # Create formatters
-    console_formatter = logging.Formatter(
-        "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[logging.FileHandler(log_file), logging.StreamHandler()],
     )
-    file_formatter = logging.Formatter(
-        "%(asctime)s [%(levelname)8s] [%(name)s] %(message)s (%(filename)s:%(lineno)s)"
-    )
-
-    # Console handler
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(console_formatter)
-
-    # File handler
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(file_formatter)
-
-    # Configure root logger
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG)
-    root_logger.addHandler(console_handler)
-    root_logger.addHandler(file_handler)
 
     return log_file
 
 
-def log_test_result(logger, test_name, result, error=None):
-    """Log test result with appropriate level and details."""
-    if result == "PASS":
-        logger.info(f"✅ Test passed: {test_name}")
-    elif result == "SKIP":
-        logger.warning(f"⏭️  Test skipped: {test_name}")
-    elif result == "FAIL":
-        logger.error(f"❌ Test failed: {test_name}")
-        if error:
-            logger.error(f"Error details: {str(error)}", exc_info=True)
+def log_test_result(logger, test_name, result):
+    """Log test result"""
+    logger.info(f"Test {test_name}: {result}")
 
 
-def log_test_step(logger, step_description):
-    """Log a test step with a consistent format."""
-    logger.info(f"📝 {step_description}")
-
-
-def log_resource_cleanup(logger, resource_type, resource_name, success=True):
-    """Log cleanup of test resources."""
-    if success:
-        logger.info(f"🧹 Cleaned up {resource_type}: {resource_name}")
-    else:
-        logger.warning(f"⚠️  Failed to clean up {resource_type}: {resource_name}")
-
-
-def log_api_interaction(logger, service_name, operation, success=True, details=None):
-    """Log external API interactions."""
-    if success:
-        logger.info(f"🔄 {service_name} API {operation} successful")
-        if details:
-            logger.debug(f"Response details: {details}")
-    else:
-        logger.error(f"⚠️  {service_name} API {operation} failed")
-        if details:
-            logger.error(f"Error details: {details}")
+def log_resource_cleanup(resource_type, resource_name):
+    """Log resource cleanup operations"""
+    logger = logging.getLogger(__name__)
+    logger.info(f"Cleaning up {resource_type}: {resource_name}")
