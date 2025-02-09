@@ -81,12 +81,14 @@ def submit_transcription(myblob: func.InputStream):
             logging.info(f"\n=== Generating SAS Token ===")
             logging.info(f"Blob: {clean_blob_name}")
             try:
-                # Get user delegation key when using Azure AD auth
+                # Get storage account name from environment
+                storage_account = os.getenv("AZURE_STORAGE_ACCOUNT")
+                if not storage_account:
+                    raise ValueError("AZURE_STORAGE_ACCOUNT not found")
+
+                # Generate SAS token using managed identity
                 user_delegation_key = blob_service_client.get_user_delegation_key(
-                    key_start_time=datetime.utcnow()
-                    - timedelta(
-                        minutes=5
-                    ),  # Start slightly in the past to avoid clock skew
+                    key_start_time=datetime.utcnow() - timedelta(minutes=5),
                     key_expiry_time=datetime.utcnow() + timedelta(hours=2),
                 )
 
@@ -106,7 +108,7 @@ def submit_transcription(myblob: func.InputStream):
                 logging.info(
                     f"Content Type: {blob_properties.content_settings.content_type}"
                 )
-                logging.info(f"Size: {blob_properties.size:,} bytes")
+                logging.info(f"Size: {blob_properties.size} bytes")
                 logging.info(f"Created: {blob_properties.creation_time}")
                 logging.info(f"Base URL: {blob_client.url}")
                 logging.info("SAS URL generated successfully (token redacted)")
@@ -119,7 +121,7 @@ def submit_transcription(myblob: func.InputStream):
                     f"Content Type: {response.headers.get('content-type', 'N/A')}"
                 )
                 logging.info(
-                    f"Content Length: {response.headers.get('content-length', 'N/A'):,} bytes"
+                    f"Content Length: {response.headers.get('content-length', 'N/A')} bytes"
                 )
 
             except Exception as e:
