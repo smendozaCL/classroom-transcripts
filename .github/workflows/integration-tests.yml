@@ -43,14 +43,21 @@ jobs:
           pip install -r src/functions/requirements.txt
           pip install pytest pytest-azurepipelines pytest-cov pytest-xdist
 
-      - name: Create test audio file
+      - name: Download test audio file
         run: |
           mkdir -p data
-          echo "Test audio content" > data/short-classroom-sample.m4a
+          curl -L -o data/short-classroom-sample.m4a https://github.com/eddo-ai/classroom-transcripts/raw/main/data/short-classroom-sample.m4a || \
+          curl -L -o data/short-classroom-sample.m4a https://github.com/eddo-ai/classroom-transcripts/raw/develop/data/short-classroom-sample.m4a || \
+          echo "Creating dummy audio file for testing" > data/short-classroom-sample.m4a
+
+      - name: Create test directories
+        run: |
+          mkdir -p logs
+          mkdir -p test-results
+          mkdir -p test-results/coverage-html
 
       - name: Run integration tests
         run: |
-          mkdir -p logs
           pytest tests/ -v -m "integration" \
             --junitxml=test-results/junit.xml \
             --cov=src \
@@ -81,27 +88,63 @@ jobs:
         run: |
           echo "::group::Test Summary"
           python -c "
+          import os
           import xml.etree.ElementTree as ET
-          tree = ET.parse('test-results/junit.xml')
-          root = tree.getroot()
-          tests = int(root.attrib['tests'])
-          failures = int(root.attrib['failures'])
-          errors = int(root.attrib['errors'])
-          skipped = int(root.attrib['skipped'])
-          print(f'Total Tests: {tests}')
-          print(f'Passed: {tests - failures - errors - skipped}')
-          print(f'Failed: {failures}')
-          print(f'Errors: {errors}')
-          print(f'Skipped: {skipped}')
+
+          junit_path = 'test-results/junit.xml'
+          if not os.path.exists(junit_path):
+              print('No test results file found')
+              exit(0)
+
+          try:
+              tree = ET.parse(junit_path)
+              root = tree.getroot()
+              
+              # Different pytest XML formats might use different attribute names
+              tests = int(root.attrib.get('tests', 0))
+              failures = int(root.attrib.get('failures', 0))
+              errors = int(root.attrib.get('errors', 0))
+              skipped = int(root.attrib.get('skipped', 0))
+              
+              print(f'Total Tests: {tests}')
+              print(f'Passed: {tests - failures - errors - skipped}')
+              print(f'Failed: {failures}')
+              print(f'Errors: {errors}')
+              print(f'Skipped: {skipped}')
+              
+              # Print test case details
+              print('\nTest Case Details:')
+              for testcase in root.findall('.//testcase'):
+                  name = testcase.attrib.get('name', 'Unknown')
+                  result = 'Passed'
+                  
+                  failure = testcase.find('failure')
+                  error = testcase.find('error')
+                  skipped = testcase.find('skipped')
+                  
+                  if failure is not None:
+                      result = f'Failed: {failure.text}'
+                  elif error is not None:
+                      result = f'Error: {error.text}'
+                  elif skipped is not None:
+                      result = 'Skipped'
+                  
+                  print(f'- {name}: {result}')
+
+          except Exception as e:
+              print(f'Error processing test results: {str(e)}')
+              exit(0)
           "
           echo "::endgroup::"
 
           if [ -d "logs" ]; then
             echo "::group::Test Logs"
             for log in logs/*.log; do
-              echo "=== $log ==="
-              tail -n 50 "$log"
-              echo
+              if [ -f "$log" ]; then
+                echo "=== $log ==="
+                tail -n 50 "$log"
+                echo
+              fi
             done
             echo "::endgroup::"
           fi
