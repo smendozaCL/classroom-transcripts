@@ -1,0 +1,4 @@
+azure-functions>=1.21.3
+azure-storage-blob>=12.24.1
+assemblyai>=0.37.0 
+azure-identity>=1.19.0

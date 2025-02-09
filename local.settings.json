@@ -1,9 +1,12 @@
 {
     "IsEncrypted": false,
     "Values": {
-        "AzureWebJobsStorage": "UseDevelopmentStorage=true",
         "FUNCTIONS_WORKER_RUNTIME": "python",
-        "ASSEMBLYAI_API_KEY": "",
-        "AZURE_STORAGE_CONNECTION_STRING": ""
+        "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+        "AZURE_STORAGE_CONNECTION_STRING": "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;",
+        "ASSEMBLYAI_API_KEY": "97479be435e843419758b6d264bdf17e",
+        "AZURE_STORAGE_SAS_URL": "http://127.0.0.1:10000/devstoreaccount1/uploads?sv=2018-03-28&st=2025-02-08T20%3A53%3A46Z&se=2025-02-09T20%3A53%3A46Z&sr=c&sp=rcl&sig=8RtU5Wi0XsXYVxAgD%2BUqNvaA42aKQrilpcdVkyJrVGo%3D",
+        "AZURE_FUNCTION_KEY": "local",
+        "WEBSITE_HOSTNAME": "localhost:7073"
     }
-} 
+}

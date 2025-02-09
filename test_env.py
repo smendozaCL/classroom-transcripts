@@ -4,8 +4,10 @@ import os
 def check_env():
     required_vars = [
         "ASSEMBLYAI_API_KEY",
-        "AZURE_STORAGE_SAS_URL",
-        "AZURE_STORAGE_TARGET_SAS_URL",
+        "AZURE_STORAGE_ACCOUNT",
+        "AZURE_TENANT_ID",
+        "AZURE_CLIENT_ID",
+        "AZURE_CLIENT_SECRET",
     ]
 
     print("Checking environment variables:")

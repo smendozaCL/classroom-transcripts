@@ -1,0 +1,4 @@
+assemblyai>=0.37.0
+azure-functions>=1.17.0
+python-dotenv>=1.0.1
+azure-storage-blob>=12.8.0 

@@ -1,2 +1,4 @@
-- Use SAS instead of connection strings for Azure Storage
+- Use azure-identity and managed identity for Azure resources
 - define env variables in .env.example
+- Use Azure CLI Reference to correctly format commands
+- Query App Insights for errors and metrics: ```az monitor app-insights query --app classroom-transcripts-func --analytics-query "traces | where timestamp > ago(5m) and severityLevel >= 2 | project timestamp, message, severityLevel" --resource-group classroom-transcripts-rg```

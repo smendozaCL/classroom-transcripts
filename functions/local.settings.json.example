@@ -1,0 +1,12 @@
+{
+    "IsEncrypted": false,
+    "Values": {
+        "AzureWebJobsStorage": "",
+        "FUNCTIONS_WORKER_RUNTIME": "python",
+        "ASSEMBLYAI_API_KEY": "your_assemblyai_api_key",
+        "AZURE_STORAGE_ACCOUNT": "your_storage_account_name",
+        "AZURE_TENANT_ID": "your_tenant_id",
+        "AZURE_CLIENT_ID": "your_client_id",
+        "AZURE_CLIENT_SECRET": "your_client_secret"
+    }
+}

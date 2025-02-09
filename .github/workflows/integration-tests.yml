@@ -1,0 +1,107 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  integration-tests:
+    runs-on: ubuntu-latest
+
+    services:
+      azurite:
+        image: mcr.microsoft.com/azure-storage/azurite
+        ports:
+          - 10000:10000
+          - 10001:10001
+          - 10002:10002
+
+    env:
+      AZURE_STORAGE_ACCOUNT: devstoreaccount1
+      AZURE_STORAGE_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;
+      ASSEMBLYAI_API_KEY: ${{ secrets.ASSEMBLYAI_API_KEY }}
+      AZURE_FUNCTION_KEY: ${{ secrets.AZURE_FUNCTION_KEY }}
+      WEBSITE_HOSTNAME: ${{ secrets.WEBSITE_HOSTNAME }}
+      PYTHONUNBUFFERED: 1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r src/functions/requirements.txt
+          pip install pytest pytest-azurepipelines pytest-cov pytest-xdist
+
+      - name: Create test audio file
+        run: |
+          mkdir -p data
+          echo "Test audio content" > data/short-classroom-sample.m4a
+
+      - name: Run integration tests
+        run: |
+          mkdir -p logs
+          pytest tests/ -v -m "integration" \
+            --junitxml=test-results/junit.xml \
+            --cov=src \
+            --cov-report=xml:test-results/coverage.xml \
+            --cov-report=html:test-results/coverage-html \
+            -n auto
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: |
+            test-results/
+            logs/
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: success()
+        with:
+          file: test-results/coverage.xml
+          flags: integration-tests
+          name: codecov-integration
+          fail_ci_if_error: true
+
+      - name: Process test results
+        if: always()
+        run: |
+          echo "::group::Test Summary"
+          python -c "
+          import xml.etree.ElementTree as ET
+          tree = ET.parse('test-results/junit.xml')
+          root = tree.getroot()
+          tests = int(root.attrib['tests'])
+          failures = int(root.attrib['failures'])
+          errors = int(root.attrib['errors'])
+          skipped = int(root.attrib['skipped'])
+          print(f'Total Tests: {tests}')
+          print(f'Passed: {tests - failures - errors - skipped}')
+          print(f'Failed: {failures}')
+          print(f'Errors: {errors}')
+          print(f'Skipped: {skipped}')
+          "
+          echo "::endgroup::"
+
+          if [ -d "logs" ]; then
+            echo "::group::Test Logs"
+            for log in logs/*.log; do
+              echo "=== $log ==="
+              tail -n 50 "$log"
+              echo
+            done
+            echo "::endgroup::"
+          fi

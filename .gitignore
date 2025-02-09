@@ -29,4 +29,14 @@ build/
 
 .python_packages
 
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Azure Storage (legacy)
 .azurite
+
+# Azure Functions
+local.settings.json
+function.zip

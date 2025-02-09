@@ -1,5 +1,5 @@
 {
-    "scriptFile": "../transcription_function.py",
+    "scriptFile": "__init__.py",
     "entryPoint": "submit_transcription",
     "bindings": [
         {
@@ -7,7 +7,8 @@
             "type": "blobTrigger",
             "direction": "in",
             "path": "uploads/{name}",
-            "connection": "AzureWebJobsStorage"
+            "connection": "AzureWebJobsStorage",
+            "dataType": "binary"
         }
     ]
 }
