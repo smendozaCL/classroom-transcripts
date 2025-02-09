@@ -87,12 +87,17 @@ def submit_transcription(myblob: func.InputStream):
             logging.info(f"\n=== Generating SAS Token ===")
             logging.info(f"Blob: {clean_blob_name}")
             try:
+                # Get user delegation key
+                user_delegation_key = blob_service_client.get_user_delegation_key(
+                    key_start_time=datetime.utcnow(),
+                    key_expiry_time=datetime.utcnow() + timedelta(hours=2),
+                )
+
                 sas_token = generate_blob_sas(
                     account_name=storage_account,
                     container_name="uploads",
                     blob_name=clean_blob_name,
-                    account_key=None,
-                    credential=credential,
+                    user_delegation_key=user_delegation_key,
                     permission=BlobSasPermissions(read=True),
                     expiry=datetime.utcnow() + timedelta(hours=1),
                 )

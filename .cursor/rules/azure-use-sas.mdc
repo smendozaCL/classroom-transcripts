@@ -1,8 +1,0 @@
----
-description: using azure storage
-globs: .py
----
-
-# Your rule content
-
-- Use SAS urls in lieu of connection strings
