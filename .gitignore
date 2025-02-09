@@ -34,7 +34,7 @@ build/
 .env.local
 .env.*.local
 
-# Azure Storage (legacy)
+# Azure Storage (local emulator)
 .azurite
 
 # Azure Functions

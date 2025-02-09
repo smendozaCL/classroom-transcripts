@@ -27,3 +27,6 @@ packages = ["src/classroom_transcripts"]
 dev-dependencies = [
     "watchdog>=6.0.0",
 ]
+
+[tool.uv.workspace]
+members = ["src/functions"]

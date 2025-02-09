@@ -1,0 +1,17 @@
+[project]
+name = "functions"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "azure-functions>=1.21.3",
+    "azure-storage-blob>=12.24.1",
+    "assemblyai>=0.37.0",
+    "azure-identity>=1.19.0",
+    "azure-functions-durable>=1.2.10",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
