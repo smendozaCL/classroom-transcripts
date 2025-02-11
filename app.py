@@ -14,7 +14,7 @@ import asyncio
 load_dotenv()
 
 st.set_page_config(
-    page_title="Classroom Transcripts with eddo.ai",
+    page_title="AI Transcripts for Carnegie Learning",
     page_icon="🎤",
     initial_sidebar_state="collapsed",
 )
