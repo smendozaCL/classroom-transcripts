@@ -174,7 +174,7 @@ async def submit_transcription(file: UploadedFile) -> aai.TranscriptStatus:
                     asyncio.wrap_future(transcript_future), timeout=3
                 )
             except asyncio.TimeoutError:
-                st.warning(
+                st.info(
                     "This one might take a little longer - we'll post the transcript to Google Drive as soon as it's ready."
                 )
 
