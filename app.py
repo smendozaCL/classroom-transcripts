@@ -16,6 +16,7 @@ load_dotenv()
 st.set_page_config(
     page_title="Classroom Transcripts with eddo.ai",
     page_icon="🎤",
+    initial_sidebar_state="collapsed",
 )
 
 # Initialize AssemblyAI
@@ -132,9 +133,13 @@ logging.debug(f"Upload Container: {uploads_container}")
 logging.debug(f"Transcripts Container: {transcripts_container}")
 logging.debug("Azure Identity: Using service principal authentication")
 
-st.title("Classroom Transcription")
+st.title("🎤 Classroom Transcripts")
+st.caption("Coaching tools with eddo.ai")
 
-st.write("Upload your classroom audio files to get a text-based transcript.")
+st.subheader("Upload a Class Recording")
+st.write(
+    "We'll generate a transcript and post it to Google Drive for you and your coach."
+)
 
 
 def upload_to_azure(file):
@@ -191,10 +196,10 @@ async def submit_transcription(file: UploadedFile) -> aai.TranscriptStatus:
         st.expander("Error details").write(f"{e}")
         return aai.TranscriptStatus.error
 
-
-uploaded_file = st.file_uploader(
-    "Choose an audio file",
-    type=[
+with st.container(border=True):
+    uploaded_file = st.file_uploader(
+        "Choose an audio file",
+        type=[
         "3ga",
         "8svx",
         "aac",

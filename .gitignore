@@ -43,4 +43,7 @@ function.zip
 
 logs/
 test-output.xml
+
+# Google OAuth
 credentials.json
+token.json

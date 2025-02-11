@@ -2,17 +2,11 @@ import streamlit as st
 import assemblyai as aai
 from datetime import datetime
 import pandas as pd
-from dotenv import load_dotenv
 import os
-from urllib.parse import urlparse, parse_qs
 import plotly.express as px
-import plotly.graph_objects as go
 from assemblyai.types import ListTranscriptParameters
-
-load_dotenv()
-
-# Configure AssemblyAI
-aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
+import pytz
+from utils.google_drive import upload_transcript_to_drive
 
 st.set_page_config(
     page_title="Transcript Review Dashboard",
@@ -20,6 +14,11 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+
+# Configure AssemblyAI
+aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
+
 
 # Initialize session state
 if "page_token" not in st.session_state:
@@ -29,11 +28,50 @@ if "annotations" not in st.session_state:
 if "selected_transcript" not in st.session_state:
     st.session_state.selected_transcript = None
 
+# Initialize debug mode from secrets
+DEBUG = st.secrets.get("DEBUG", False)  # Default to False if not set
+
 # Main content area with sidebar
 st.title("📚 Transcript Review Dashboard")
 
 # Initialize the transcriber
 transcriber = aai.Transcriber()
+
+
+def format_date_with_timezone(
+    date_str, timezone_name="America/New_York", show_timezone=True
+):
+    # Convert string to datetime if needed
+    if isinstance(date_str, str):
+        date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+    else:
+        date = date_str
+
+    # Convert to selected timezone
+    timezone = pytz.timezone(timezone_name)
+    localized_date = date.astimezone(timezone)
+
+    # Format with a friendly string like "Monday, March 20 at 2:30 PM EDT"
+    format_string = "%A, %B %d at %I:%M %p"
+    if show_timezone:
+        format_string += " %Z"
+    return localized_date.strftime(format_string)
+
+
+def format_duration(seconds):
+    """Convert seconds to HH:MM:SS format"""
+    if not seconds:
+        return "N/A"
+
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    seconds = int(seconds % 60)
+
+    if hours > 0:
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    else:
+        return f"{minutes:02d}:{seconds:02d}"
+
 
 try:
     # Get list of transcripts with pagination
@@ -50,9 +88,10 @@ try:
         response = transcriber.list_transcripts(params=params)
 
         # Debug view of raw response
-        with st.sidebar:
-            with st.expander("🔍 Debug: Raw Transcripts", expanded=False):
-                st.write(response)
+        if DEBUG:
+            with st.sidebar:
+                with st.expander("🔍 Debug: Raw Transcripts", expanded=False):
+                    st.write(response)
 
         if not response.transcripts:
             break
@@ -73,7 +112,6 @@ try:
                         "Status": status,
                         "Created": item.created,
                         "Friendly Date": friendly_date,
-                        "Duration": "N/A",  # Duration not available in list response
                         "Audio URL": item.audio_url or "",
                     }
                 )
@@ -98,7 +136,7 @@ try:
     else:
         # Create display dataframe
         df = pd.DataFrame(transcript_data)
-        df["Created"] = pd.to_datetime(df["Created"])
+        df["Created"] = pd.to_datetime(df["Created"]).dt.tz_localize("UTC")
 
         # Sort by creation date (newest first)
         df = df.sort_values("Created", ascending=False)
@@ -106,8 +144,25 @@ try:
         # Sidebar with status summary and recent transcripts
         with st.sidebar:
             st.title("🕒 Recent Transcripts")
+            # Dictionary mapping timezone names to pytz timezones
+            timezones = {
+                "Eastern Standard Time (EST)": "US/Eastern",
+                "Central Standard Time (CST)": "US/Central",
+                "Mountain Standard Time (MST)": "US/Mountain",
+                "Pacific Standard Time (PST)": "US/Pacific",
+                "Alaska Standard Time (AKST)": "US/Alaska",
+                "Hawaii Standard Time (HST)": "US/Hawaii",
+                # Add more timezones as needed
+            }
+
+            # Dropdown for user to select timezone
+            selected_tz = st.selectbox("Select your timezone", list(timezones.keys()))
+            user_timezone = pytz.timezone(timezones[selected_tz])
             # Show the date range of the transcripts
-            st.caption(f"Since {df['Created'].min().strftime('%B %d, %Y')} at {df['Created'].min().strftime('%I:%M %p')}")
+            min_date = df["Created"].min()
+            st.caption(
+                f"Since {min_date.astimezone(user_timezone).strftime('%B %d, %Y')} at {min_date.astimezone(user_timezone).strftime('%I:%M %p')}"
+            )
 
             st.divider()
 
@@ -119,6 +174,38 @@ try:
             else:
                 # Show 10 most recent completed transcripts
                 recent_completed = completed_df.head(10)
+
+                # Add load more button
+                if len(completed_df) > 10:
+                    if "show_more" not in st.session_state:
+                        st.session_state.show_more = False
+
+                    if st.button("📜 Load More Transcripts"):
+                        st.session_state.show_more = not st.session_state.show_more
+
+                    if st.session_state.show_more:
+                        recent_completed = completed_df.head(
+                            25
+                        )  # Show up to 25 when expanded
+
+                # Add timezone selector
+                timezone_options = [
+                    "America/New_York",
+                    "America/Los_Angeles",
+                    "America/Chicago",
+                    "UTC",
+                ]
+                selected_timezone = st.selectbox(
+                    "Select Timezone", options=timezone_options, index=0
+                )
+
+                # Format dates with selected timezone - without timezone for radio list
+                recent_completed["Friendly Date"] = recent_completed["Created"].apply(
+                    lambda x: format_date_with_timezone(
+                        x, selected_timezone, show_timezone=False
+                    )
+                )
+
                 selected_id = st.radio(
                     "Select a transcript to review",
                     options=recent_completed["ID"].tolist(),
@@ -166,8 +253,54 @@ try:
                     st.header(
                         f"📝 {df[df['ID'] == selected_id]['Friendly Date'].iloc[0]}"
                     )
+
+                    # Add download and export buttons in a 4-column grid
+                    col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+                    with col1:
+                        if st.button("📥 Download Transcript", type="secondary"):
+                            # Prepare transcript content
+                            if transcript.utterances:
+                                content = "\n\n".join(
+                                    [
+                                        f"{u.speaker} ({u.start / 1000:.1f}s - {u.end / 1000:.1f}s):\n{u.text}"
+                                        for u in transcript.utterances
+                                    ]
+                                )
+                            else:
+                                content = (
+                                    transcript.text or "No transcript text available"
+                                )
+
+                            # Create download button
+                            st.download_button(
+                                label="Save as TXT",
+                                data=content,
+                                file_name=f"transcript_{selected_id}.txt",
+                                mime="text/plain",
+                            )
+
+                    with col2:
+                        if st.button("📤 Send to Google Drive", type="secondary"):
+                            try:
+                                with st.spinner("Uploading to Google Drive..."):
+                                    result = upload_transcript_to_drive(
+                                        transcript, f"transcript_{selected_id}.txt"
+                                    )
+
+                                if result["success"]:
+                                    st.success("Successfully uploaded to Google Drive!")
+                                    st.markdown(
+                                        f"[Open in Google Drive]({result['link']})"
+                                    )
+                                else:
+                                    st.error(f"Failed to upload: {result['error']}")
+                            except Exception as e:
+                                st.error(f"Error uploading to Google Drive: {str(e)}")
+
+                    # Audio player spans two columns
                     if transcript.audio_url:
-                        st.audio(transcript.audio_url)
+                        with col3, col4:
+                            st.audio(transcript.audio_url)
 
                     # Create two columns for metadata and debug info
                     meta_col, debug_col = st.columns([2, 1])
@@ -179,13 +312,15 @@ try:
                         with metrics_cols[0]:
                             st.metric(
                                 "Duration",
-                                f"{transcript.audio_duration:.1f}s"
+                                format_duration(transcript.audio_duration)
                                 if transcript.audio_duration
                                 else "N/A",
                             )
                             st.metric(
                                 "Words",
-                                len(transcript.words) if transcript.words else 0,
+                                f"{len(transcript.words):,}"
+                                if transcript.words
+                                else "0",
                             )
                         with metrics_cols[1]:
                             st.metric(
@@ -214,26 +349,34 @@ try:
 
                     with debug_col:
                         # Debug expander with raw transcript data
-                        with st.expander("🔍 Debug Info", expanded=False):
-                            st.json(
-                                {
-                                    "id": transcript.id,
-                                    "status": str(transcript.status),
-                                    "audio_url": transcript.audio_url,
-                                    "audio_duration": transcript.audio_duration,
-                                    "confidence": getattr(
-                                        transcript, "confidence", None
-                                    ),
-                                    "language": getattr(
-                                        transcript, "language_code", None
-                                    ),
-                                }
-                            )
+                        if DEBUG:
+                            with st.expander("🔍 Debug Info", expanded=False):
+                                st.json(
+                                    {
+                                        "id": transcript.id,
+                                        "status": str(transcript.status),
+                                        "audio_url": transcript.audio_url,
+                                        "audio_duration": transcript.audio_duration,
+                                        "confidence": getattr(
+                                            transcript, "confidence", None
+                                        ),
+                                        "language": getattr(
+                                            transcript, "language_code", None
+                                        ),
+                                    }
+                                )
 
                     # Main content tabs
-                    tabs = st.tabs(
-                        ["📝 Transcript", "👥 Speakers", "📊 Analysis", "💭 Feedback"]
-                    )
+                    tab_list = [
+                        "📝 Transcript",
+                        "👥 Speakers",
+                        "📊 Analysis",
+                        "💭 Feedback",
+                    ]
+                    if DEBUG:
+                        tab_list.append("🔍 Details")
+
+                    tabs = st.tabs(tab_list)
 
                     with tabs[0]:
                         # Full transcript with utterance display
@@ -242,7 +385,7 @@ try:
                             for utterance in transcript.utterances:
                                 with st.container():
                                     st.markdown(
-                                        f"**{utterance.speaker}** ({utterance.start / 1000:.1f}s - {utterance.end / 1000:.1f}s)"
+                                        f"**{utterance.speaker}** ({format_duration(utterance.start / 1000)} - {format_duration(utterance.end / 1000)})"
                                     )
                                     st.write(utterance.text)
                                     st.divider()
@@ -404,6 +547,12 @@ try:
                                     st.write(annotation["feedback"])
                         else:
                             st.info("No feedback added yet.")
+
+                    # Only show Details tab in debug mode
+                    if DEBUG and len(tabs) > 4:
+                        with tabs[4]:
+                            st.subheader("🔍 Details")
+                            st.write(transcript)
                 else:
                     st.warning(f"Transcript status: {transcript.status}")
                     if transcript.status == aai.TranscriptStatus.error:
