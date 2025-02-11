@@ -1,14 +1,24 @@
 {
-    "python.analysis.typeCheckingMode": "basic",
-    "azureFunctions.deploySubpath": ".",
-    "azureFunctions.scmDoBuildDuringDeployment": true,
-    "azureFunctions.pythonVenv": ".venv",
-    "azureFunctions.projectLanguage": "Python",
-    "azureFunctions.projectRuntime": "~4",
-    "debug.internalConsoleOptions": "neverOpen",
-    "python.testing.pytestArgs": [
-        "tests"
-    ],
-    "python.testing.unittestEnabled": false,
-    "python.testing.pytestEnabled": true
+  "python.analysis.typeCheckingMode": "basic",
+  "azureFunctions.deploySubpath": ".",
+  "azureFunctions.scmDoBuildDuringDeployment": true,
+  "azureFunctions.pythonVenv": ".venv",
+  "azureFunctions.projectLanguage": "Python",
+  "azureFunctions.projectRuntime": "~4",
+  "debug.internalConsoleOptions": "neverOpen",
+  "python.testing.pytestArgs": ["tests"],
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestEnabled": true,
+  "containerApps.deploymentConfigurations": [
+    {
+      "label": "classroom-transcripts",
+      "type": "AcrDockerBuildRequest",
+      "dockerfilePath": "Dockerfile",
+      "srcPath": ".",
+      "envPath": ".env",
+      "resourceGroup": "container-apps-west",
+      "containerApp": "classroom-transcripts",
+      "containerRegistry": "containerappswest7e0940"
+    }
+  ]
 }
