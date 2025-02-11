@@ -12,7 +12,7 @@ COPY requirements.txt .
 RUN python -m pip install -r requirements.txt
 RUN python -m pip install uv
 RUN python -m uv venv 3.12
-RUN python uv sync
+RUN python -m uv sync
 
 WORKDIR /app
 COPY . /app
