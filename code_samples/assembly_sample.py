@@ -3,11 +3,11 @@
 # pip install -U assemblyai
 #
 # Note: Some macOS users may need to use `pip3` instead of `pip`.
-
+import os
 import assemblyai as aai
 
 # Replace with your API key
-aai.settings.api_key = "97479be435e843419758b6d264bdf17e"
+aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
 
 # URL of the file to transcribe
 FILE_URL = "https://assemblyaiusercontent.com/playground/CLx_YCjLXcb.m4a"
