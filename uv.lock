@@ -5,12 +5,6 @@ resolution-markers = [
     "python_full_version >= '3.12.4'",
 ]
 
-[manifest]
-members = [
-    "classroom-transcripts",
-    "functions",
-]
-
 [[package]]
 name = "aiohappyeyeballs"
 version = "2.4.6"
@@ -165,22 +159,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ee/6a/614f670cd8d28c68f744d849fafb654e6ab456954eb7160ddee25bfaa373/azure-functions-1.21.3.tar.gz", hash = "sha256:c359b9dbd2998c84d8595e31a28ffad4e8ca8dcfb4a3798327f776a67f964351", size = 205342 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/85/9f/2ab4ee66cb803d48b4a685a2c0a1a20b8f54f9c8a4ac474ffe1ebc0f9466/azure_functions-1.21.3-py3-none-any.whl", hash = "sha256:6c45f5e61fe59328c81928a428d43c838e9ead52f1cde1628fcabb372fa10cc8", size = 185657 },
-]
-
-[[package]]
-name = "azure-functions-durable"
-version = "1.2.10"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "aiohttp" },
-    { name = "azure-functions" },
-    { name = "furl" },
-    { name = "python-dateutil" },
-    { name = "requests" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/2a/fe/b7f32ba6b79532148c5cef2e326e3544e647f03ada811a25f3c1bca45631/azure-functions-durable-1.2.10.tar.gz", hash = "sha256:a1bddfaefff4a4913b0a839c86362d4234d4844b5cfe7328072ceb81edeefcc1", size = 104494 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/31/04/cb3f1db98a844be9cd8a0db91ad79accde26901f889f5ac8e4ec337f015b/azure_functions_durable-1.2.10-py3-none-any.whl", hash = "sha256:abc33213f571c161af51e7ff23556db294e4049d1bc17b2a9594de458d9a0486", size = 111116 },
 ]
 
 [[package]]
@@ -536,54 +514,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/ab/42/0595b3dbffc2e82d7fe658c12d5a5bafcd7516c6bf2d1d1feb5387caa9c1/frozenlist-1.5.0-cp313-cp313-win32.whl", hash = "sha256:31a9ac2b38ab9b5a8933b693db4939764ad3f299fcaa931a3e605bc3460e693c", size = 44914 },
     { url = "https://files.pythonhosted.org/packages/17/c4/b7db1206a3fea44bf3b838ca61deb6f74424a8a5db1dd53ecb21da669be6/frozenlist-1.5.0-cp313-cp313-win_amd64.whl", hash = "sha256:11aabdd62b8b9c4b84081a3c246506d1cddd2dd93ff0ad53ede5defec7886b28", size = 51167 },
     { url = "https://files.pythonhosted.org/packages/c6/c8/a5be5b7550c10858fcf9b0ea054baccab474da77d37f1e828ce043a3a5d4/frozenlist-1.5.0-py3-none-any.whl", hash = "sha256:d994863bba198a4a518b467bb971c56e1db3f180a25c6cf7bb1949c267f748c3", size = 11901 },
-]
-
-[[package]]
-name = "functions"
-version = "0.1.0"
-source = { editable = "src/functions" }
-dependencies = [
-    { name = "assemblyai" },
-    { name = "azure-functions" },
-    { name = "azure-functions-durable" },
-    { name = "azure-identity" },
-    { name = "azure-storage-blob" },
-    { name = "python-dotenv" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "assemblyai", specifier = ">=0.37.0" },
-    { name = "azure-functions", specifier = ">=1.21.3" },
-    { name = "azure-functions-durable", specifier = ">=1.2.10" },
-    { name = "azure-identity", specifier = ">=1.19.0" },
-    { name = "azure-storage-blob", specifier = ">=12.24.1" },
-    { name = "python-dotenv", specifier = ">=1.0.1" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=8.0.0" },
-    { name = "pytest-asyncio", specifier = ">=0.23.5" },
-]
-
-[[package]]
-name = "furl"
-version = "2.1.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "orderedmultidict" },
-    { name = "six" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/2a/0a/31a43d63d25f045b88fe7d3267e9ec3ce3820572205a9342c1cdf2ad2ca3/furl-2.1.3.tar.gz", hash = "sha256:5a6188fe2666c484a12159c18be97a1977a71d632ef5bb867ef15f54af39cc4e", size = 44223 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/41/ef/a572e03144d18842c480bd25165ec50ddc20b1744b2aeaaae4408a281f6f/furl-2.1.3-py2.py3-none-any.whl", hash = "sha256:9ab425062c4217f9802508e45feb4a83e54324273ac4b202f1850363309666c0", size = 20880 },
 ]
 
 [[package]]
@@ -1126,18 +1056,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/d9/cf/61e71ce64cf0a38f029da0f9a5f10c9fa0e69a7a977b537126dac50adfea/openai-1.61.1.tar.gz", hash = "sha256:ce1851507218209961f89f3520e06726c0aa7d0512386f0f977e3ac3e4f2472e", size = 350784 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9a/b6/2e2a011b2dc27a6711376808b4cd8c922c476ea0f1420b39892117fa8563/openai-1.61.1-py3-none-any.whl", hash = "sha256:72b0826240ce26026ac2cd17951691f046e5be82ad122d20a8e1b30ca18bd11e", size = 463126 },
-]
-
-[[package]]
-name = "orderedmultidict"
-version = "1.0.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "six" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/53/4e/3823a27d764bb8388711f4cb6f24e58453e92d6928f4163fdb01e3a3789f/orderedmultidict-1.0.1.tar.gz", hash = "sha256:04070bbb5e87291cc9bfa51df413677faf2141c73c61d2a5f7b26bea3cd882ad", size = 20706 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/04/16/5e95c70bda8fe6ea715005c0db8e602400bdba50ae3c72cb380eba551289/orderedmultidict-1.0.1-py2.py3-none-any.whl", hash = "sha256:43c839a17ee3cdd62234c47deca1a8508a3f2ca1d0678a3bf791c87cf84adbf3", size = 11699 },
 ]
 
 [[package]]
