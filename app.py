@@ -261,3 +261,6 @@ if uploaded_file is not None:
 
 if feedback_email := os.getenv('FEEDBACK_EMAIL'):
     st.caption(f"📧 Help and feedback: {feedback_email}")
+
+with st.sidebar:
+    st.write(st.experimental_user)
