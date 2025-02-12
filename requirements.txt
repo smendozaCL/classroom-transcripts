@@ -101,7 +101,9 @@ msal==1.31.1
 msal-extensions==1.2.0
     # via azure-identity
 narwhals==1.26.0
-    # via altair
+    # via
+    #   altair
+    #   plotly
 numpy==2.2.2
     # via
     #   pandas
@@ -112,11 +114,14 @@ oauthlib==3.2.2
 packaging==24.2
     # via
     #   altair
+    #   plotly
     #   streamlit
 pandas==2.2.3
     # via streamlit
 pillow==11.1.0
     # via streamlit
+plotly==6.0.0
+    # via classroom-transcripts (pyproject.toml)
 portalocker==2.10.1
     # via msal-extensions
 proto-plus==1.26.0
