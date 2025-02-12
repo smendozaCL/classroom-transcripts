@@ -19,22 +19,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# Trigger Auth0 login
-st.login("auth0")
-
-# Access user details after authentication
-user = st.experimental_user
-
-if user:
-    st.write(f"✅ Logged in as {user['name']}")
-    st.image(user.get('picture', 'https://via.placeholder.com/150'))  # Profile pic (if available)
-    st.write("📧 Email:", user.get("email"))
-
-    if st.button("Logout"):
-        st.logout()  # Clears authentication cookie
-else:
-    st.warning("❌ Not logged in.")
-
 # Initialize AssemblyAI
 aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
 

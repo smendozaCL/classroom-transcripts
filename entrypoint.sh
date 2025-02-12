@@ -6,13 +6,11 @@ mkdir -p /app/.streamlit
 # Generate the Streamlit secrets.toml file dynamically
 cat <<EOF > /app/.streamlit/secrets.toml
 [auth]
-redirect_uri = "${STREAMLIT_AUTH_REDIRECT_URI}"
-cookie_secret = "${STREAMLIT_AUTH_COOKIE_SECRET}"
-
-[auth.auth0]
-client_id = "${STREAMLIT_AUTH_CLIENT_ID}"
-client_secret = "${STREAMLIT_AUTH_CLIENT_SECRET}"
-server_metadata_url = "https://${STREAMLIT_AUTH0_DOMAIN}/.well-known/openid-configuration"
+redirect_uri = "${AUTH_REDIRECT_URI}"
+cookie_secret = "${AUTH_COOKIE_SECRET}"
+client_id = "${AUTH_CLIENT_ID}"
+client_secret = "${AUTH_CLIENT_SECRET}"
+server_metadata_url = "https://${AUTH_SERVER_METADATA_URL}"
 EOF
 
 echo "✅ secrets.toml generated successfully."
