@@ -14,7 +14,7 @@ import asyncio
 load_dotenv()
 
 st.set_page_config(
-    page_title="AI Transcripts for Carnegie Learning",
+    page_title="AI Transcripts for Coaching",
     page_icon="🎤",
     initial_sidebar_state="collapsed",
 )
@@ -134,7 +134,8 @@ logging.debug(f"Transcripts Container: {transcripts_container}")
 logging.debug("Azure Identity: Using service principal authentication")
 
 st.title("🎤 Classroom Transcripts")
-st.caption("Coaching tools with eddo.ai")
+if org_name := os.getenv('ORGANIZATION_NAME'):
+    st.caption(f"Internal tool for testing by {org_name}.")
 
 st.subheader("Upload a Class Recording")
 st.write(
