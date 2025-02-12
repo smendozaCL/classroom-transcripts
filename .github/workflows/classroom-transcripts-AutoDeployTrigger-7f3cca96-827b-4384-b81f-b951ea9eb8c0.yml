@@ -4,19 +4,18 @@ name: Trigger auto deployment for classroom-transcripts
 on:
   # Automatically trigger it when detected changes in repo
   push:
-    branches: 
-      [ main ]
+    branches: [main]
     paths:
-    - '**'
-    - '.github/workflows/classroom-transcripts-AutoDeployTrigger-7f3cca96-827b-4384-b81f-b951ea9eb8c0.yml'
+      - '**'
+      - '.github/workflows/classroom-transcripts-AutoDeployTrigger-7f3cca96-827b-4384-b81f-b951ea9eb8c0.yml'
 
-  # Allow manual trigger 
-  workflow_dispatch:      
+  # Allow manual trigger
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    permissions: 
+    permissions:
       id-token: write #This is required for requesting the OIDC JWT Token
       contents: read #Required when GH token is used to authenticate with private repo
 
@@ -24,20 +23,10 @@ jobs:
       - name: Checkout to the branch
         uses: actions/checkout@v2
 
-      - name: Set up Python 3.12
+      - name: Set up Python 3.13
         uses: actions/setup-python@v4
         with:
-          python-version: '3.12'
-          
-      - name: Install uv
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-          
-      - name: Create venv and install dependencies
-        run: |
-          uv venv
-          uv pip install -r requirements.txt
+          python-version: '3.13'
 
       - name: Azure Login
         uses: azure/login@v1
@@ -57,5 +46,3 @@ jobs:
           containerAppName: classroom-transcripts
           resourceGroup: container-apps-west
           imageToBuild: containerappswest7e0940.azurecr.io/classroom-transcripts:${{ github.sha }}
-
-

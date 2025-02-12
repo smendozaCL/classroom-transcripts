@@ -32,7 +32,8 @@ build/
 # Environment files
 .env
 .env.local
-.env.*.local
+.env.*
+!env.example
 
 # Azure Storage (local emulator)
 .azurite
