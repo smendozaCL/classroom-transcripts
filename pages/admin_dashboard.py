@@ -29,7 +29,8 @@ if "selected_transcript" not in st.session_state:
     st.session_state.selected_transcript = None
 
 # Initialize debug mode from secrets
-DEBUG = st.secrets.get("DEBUG", False)  # Default to False if not set
+# DEBUG = st.secrets.get("DEBUG", False)  # Default to False if not set
+DEBUG = os.getenv("DEBUG", False)
 
 # Main content area with sidebar
 st.title("📚 Transcript Review Dashboard")
