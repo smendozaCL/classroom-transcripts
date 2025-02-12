@@ -1,20 +1,31 @@
 # For more information, please refer to https://aka.ms/vscode-docker-python
-FROM python:3-slim
-
-# Keeps Python from generating .pyc files in the container
-ENV PYTHONDONTWRITEBYTECODE=1
-
-# Turns off buffering for easier container logging
-ENV PYTHONUNBUFFERED=1
-
-# Install pip requirements
-COPY requirements.txt .
-RUN python -m pip install -r requirements.txt
-RUN python -m pip install uv
-RUN python -m uv venv 3.12
-RUN python -m uv sync
+FROM python:3.13-slim
 
 WORKDIR /app
+
+# Copy configuration files
+COPY pyproject.toml .
+COPY requirements.txt .
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies and create virtual environment
+RUN python -m pip install --upgrade pip
+RUN python -m pip install uv
+
+# Create virtual environment and install dependencies
+RUN python -m venv .venv
+ENV VIRTUAL_ENV=/app/.venv
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
+# Install dependencies using pip and uv in the virtual environment
+RUN pip install uv
+RUN uv pip install -r requirements.txt
+
+# Copy application code
 COPY . /app
 
 # Creates a non-root user with an explicit UID and adds permission to access the /app folder
