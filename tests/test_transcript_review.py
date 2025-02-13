@@ -1,0 +1,61 @@
+import streamlit as st
+import unittest
+from unittest.mock import patch, MagicMock
+import requests
+
+class TestTranscriptReview(unittest.TestCase):
+
+    @patch('streamlit.write')
+    @patch('streamlit.warning')
+    @patch('streamlit.session_state', {'file_uri': 'test_uri', 'transcription_id': 'test_id'})
+    def test_retrieve_file_uri_and_transcription_id(self, mock_warning, mock_write):
+        from pages import transcript_review
+        transcript_review.st.session_state = {'file_uri': 'test_uri', 'transcription_id': 'test_id'}
+        transcript_review.st.write(f"**File URI:** {transcript_review.st.session_state.file_uri}")
+        transcript_review.st.write(f"**Transcription ID:** {transcript_review.st.session_state.transcription_id}")
+        mock_write.assert_any_call("**File URI:** test_uri")
+        mock_write.assert_any_call("**Transcription ID:** test_id")
+
+    @patch('requests.post')
+    @patch('streamlit.button')
+    @patch('streamlit.success')
+    @patch('streamlit.error')
+    def test_resubmit_transcription(self, mock_error, mock_success, mock_button, mock_post):
+        mock_button.return_value = True
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = {'status': 'success'}
+        from pages import transcript_review
+        transcript_review.st.session_state = {'selected_id': 'test_id'}
+        transcript_review.st.button("Resubmit Transcription")
+        mock_success.assert_called_with("Transcription resubmitted successfully!")
+
+        mock_post.return_value.status_code = 400
+        transcript_review.st.button("Resubmit Transcription")
+        mock_error.assert_called_with("Failed to resubmit transcription: {'status': 'error'}")
+
+    @patch('streamlit.warning')
+    @patch('streamlit.session_state', {'file_uri': None, 'transcription_id': None})
+    def test_handle_fresh_session_state(self, mock_warning):
+        from pages import transcript_review
+        transcript_review.st.session_state = {'file_uri': None, 'transcription_id': None}
+        transcript_review.st.warning("No file URI or transcription ID found in session state. Please upload a new file.")
+        mock_warning.assert_called_with("No file URI or transcription ID found in session state. Please upload a new file.")
+
+    @patch('streamlit.warning')
+    @patch('streamlit.session_state', {'file_uri': None})
+    def test_no_file_uri_in_session_state(self, mock_warning):
+        from pages import transcript_review
+        transcript_review.st.session_state = {'file_uri': None}
+        transcript_review.st.warning("No file URI found in session state. Please upload a new file.")
+        mock_warning.assert_called_with("No file URI found in session state. Please upload a new file.")
+
+    @patch('streamlit.warning')
+    @patch('streamlit.session_state', {'file_uri': None, 'transcription_id': None})
+    def test_find_blob_when_file_uri_not_set(self, mock_warning):
+        from pages import transcript_review
+        transcript_review.st.session_state = {'file_uri': None, 'transcription_id': None}
+        transcript_review.st.warning("No file URI or transcription ID found in session state. Please upload a new file.")
+        mock_warning.assert_called_with("No file URI or transcription ID found in session state. Please upload a new file.")
+
+if __name__ == '__main__':
+    unittest.main()
