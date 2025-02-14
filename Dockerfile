@@ -1,5 +1,5 @@
 # For more information, please refer to https://aka.ms/vscode-docker-python
-FROM python:3.13-slim
+FROM ghcr.io/astral-sh/uv:0.5.31-python3.13-bookworm-slim
 
 # Set working directory to where the src module will be
 WORKDIR /workspace
@@ -7,23 +7,11 @@ WORKDIR /workspace
 # Copy configuration files
 COPY pyproject.toml .
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install uv package manager directly and add to PATH
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
-    echo 'export PATH="/root/.local/bin:$PATH"' >> ~/.bashrc && \
-    . ~/.bashrc
-
 # Install dependencies
-ENV PATH="/root/.local/bin:$PATH"
-RUN uv sync
+RUN uv sync --frozen
 
 # Copy application code
-COPY . .
+COPY src/ src/
 
 # Creates a non-root user with an explicit UID and adds permission to access the workspace
 # For more info, please refer to https://aka.ms/vscode-docker-python-configure-containers
@@ -31,4 +19,4 @@ RUN adduser -u 5678 --disabled-password --gecos "" appuser && chown -R appuser /
 USER appuser
 
 # During debugging, this entry point will be overridden. For more information, please refer to https://aka.ms/vscode-docker-python-debug
-CMD ["uv", "run", "streamlit", "run", "src/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+CMD ["streamlit", "run", "src/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
