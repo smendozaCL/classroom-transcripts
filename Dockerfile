@@ -6,6 +6,7 @@ WORKDIR /workspace
 
 # Copy configuration files
 COPY pyproject.toml .
+COPY uv.lock .
 
 # Install dependencies
 RUN uv sync --frozen
