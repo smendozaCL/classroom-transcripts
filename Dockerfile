@@ -26,7 +26,7 @@ RUN pip install uv
 RUN uv pip install -r requirements.txt
 
 # Copy application code
-COPY . /app
+COPY . /src/app
 
 # Creates a non-root user with an explicit UID and adds permission to access the /app folder
 # For more info, please refer to https://aka.ms/vscode-docker-python-configure-containers
