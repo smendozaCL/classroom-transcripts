@@ -153,7 +153,14 @@ async def test_transcript_mapping_flow(blob_service_client, table_service_client
         "PartitionKey": "AudioFiles",
         "RowKey": blob_name,
         "transcriptId": transcript.id,
-        "audioUrl": blob_client.url
+        "audioUrl": blob_client.url,
+        "blobSize": blob_client.get_blob_properties().size,
+        "blobContentType": blob_client.get_blob_properties().content_settings.content_type,
+        "blobLastModified": blob_client.get_blob_properties().last_modified.isoformat(),
+        "blobETag": blob_client.get_blob_properties().etag,
+        "blobLeaseState": blob_client.get_blob_properties().lease.state,
+        "blobLeaseStatus": blob_client.get_blob_properties().lease.status,
+        "uploadTime": datetime.utcnow().isoformat()
     }
     table_client.create_entity(entity=entity)
 
@@ -161,6 +168,12 @@ async def test_transcript_mapping_flow(blob_service_client, table_service_client
     retrieved_entity = table_client.get_entity("AudioFiles", blob_name)
     assert retrieved_entity["transcriptId"] == transcript.id
     assert retrieved_entity["audioUrl"] == blob_client.url
+    assert retrieved_entity["blobSize"] == blob_client.get_blob_properties().size
+    assert retrieved_entity["blobContentType"] == blob_client.get_blob_properties().content_settings.content_type
+    assert retrieved_entity["blobLastModified"] == blob_client.get_blob_properties().last_modified.isoformat()
+    assert retrieved_entity["blobETag"] == blob_client.get_blob_properties().etag
+    assert retrieved_entity["blobLeaseState"] == blob_client.get_blob_properties().lease.state
+    assert retrieved_entity["blobLeaseStatus"] == blob_client.get_blob_properties().lease.status
 
 
 @pytest.mark.asyncio
@@ -179,6 +192,12 @@ async def test_transcript_mapping_retrieval(blob_service_client, table_service_c
     assert entity is not None
     assert "transcriptId" in entity
     assert "audioUrl" in entity
+    assert "blobSize" in entity
+    assert "blobContentType" in entity
+    assert "blobLastModified" in entity
+    assert "blobETag" in entity
+    assert "blobLeaseState" in entity
+    assert "blobLeaseStatus" in entity
 
     # Verify the transcript exists in AssemblyAI
     aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
@@ -217,6 +236,12 @@ async def test_duplicate_file_uploads(blob_service_client, table_service_client,
         "RowKey": base_name,
         "transcriptId": transcript1.id,
         "audioUrl": blob_client1.url,
+        "blobSize": blob_client1.get_blob_properties().size,
+        "blobContentType": blob_client1.get_blob_properties().content_settings.content_type,
+        "blobLastModified": blob_client1.get_blob_properties().last_modified.isoformat(),
+        "blobETag": blob_client1.get_blob_properties().etag,
+        "blobLeaseState": blob_client1.get_blob_properties().lease.state,
+        "blobLeaseStatus": blob_client1.get_blob_properties().lease.status,
         "uploadTime": datetime.utcnow().isoformat()
     }
     table_client.create_entity(entity=entity1)
@@ -241,6 +266,12 @@ async def test_duplicate_file_uploads(blob_service_client, table_service_client,
         "RowKey": second_name,
         "transcriptId": transcript2.id,
         "audioUrl": blob_client2.url,
+        "blobSize": blob_client2.get_blob_properties().size,
+        "blobContentType": blob_client2.get_blob_properties().content_settings.content_type,
+        "blobLastModified": blob_client2.get_blob_properties().last_modified.isoformat(),
+        "blobETag": blob_client2.get_blob_properties().etag,
+        "blobLeaseState": blob_client2.get_blob_properties().lease.state,
+        "blobLeaseStatus": blob_client2.get_blob_properties().lease.status,
         "uploadTime": datetime.utcnow().isoformat()
     }
     table_client.create_entity(entity=entity2)
@@ -258,6 +289,19 @@ async def test_duplicate_file_uploads(blob_service_client, table_service_client,
 
     assert mapping1["transcriptId"] != mapping2["transcriptId"]
     assert mapping1["audioUrl"] != mapping2["audioUrl"]
+    assert mapping1["blobSize"] == blob_client1.get_blob_properties().size
+    assert mapping1["blobContentType"] == blob_client1.get_blob_properties().content_settings.content_type
+    assert mapping1["blobLastModified"] == blob_client1.get_blob_properties().last_modified.isoformat()
+    assert mapping1["blobETag"] == blob_client1.get_blob_properties().etag
+    assert mapping1["blobLeaseState"] == blob_client1.get_blob_properties().lease.state
+    assert mapping1["blobLeaseStatus"] == blob_client1.get_blob_properties().lease.status
+
+    assert mapping2["blobSize"] == blob_client2.get_blob_properties().size
+    assert mapping2["blobContentType"] == blob_client2.get_blob_properties().content_settings.content_type
+    assert mapping2["blobLastModified"] == blob_client2.get_blob_properties().last_modified.isoformat()
+    assert mapping2["blobETag"] == blob_client2.get_blob_properties().etag
+    assert mapping2["blobLeaseState"] == blob_client2.get_blob_properties().lease.state
+    assert mapping2["blobLeaseStatus"] == blob_client2.get_blob_properties().lease.status
 
     # Verify both transcripts are accessible in AssemblyAI
     transcript1_check = aai.Transcript.get_by_id(mapping1["transcriptId"])
@@ -320,6 +364,12 @@ async def test_concurrent_uploads(blob_service_client, table_service_client, tes
             "RowKey": file_name,
             "transcriptId": transcript.id,
             "audioUrl": blob_client.url,
+            "blobSize": blob_client.get_blob_properties().size,
+            "blobContentType": blob_client.get_blob_properties().content_settings.content_type,
+            "blobLastModified": blob_client.get_blob_properties().last_modified.isoformat(),
+            "blobETag": blob_client.get_blob_properties().etag,
+            "blobLeaseState": blob_client.get_blob_properties().lease.state,
+            "blobLeaseStatus": blob_client.get_blob_properties().lease.status,
             "uploadTime": datetime.utcnow().isoformat()
         }
         table_client.create_entity(entity=entity)
@@ -384,6 +434,12 @@ async def test_large_file_handling(blob_service_client, table_service_client, la
         "RowKey": blob_name,
         "transcriptId": transcript.id,
         "audioUrl": blob_client.url,
+        "blobSize": blob_client.get_blob_properties().size,
+        "blobContentType": blob_client.get_blob_properties().content_settings.content_type,
+        "blobLastModified": blob_client.get_blob_properties().last_modified.isoformat(),
+        "blobETag": blob_client.get_blob_properties().etag,
+        "blobLeaseState": blob_client.get_blob_properties().lease.state,
+        "blobLeaseStatus": blob_client.get_blob_properties().lease.status,
         "uploadTime": datetime.utcnow().isoformat()
     }
     table_client.create_entity(entity=entity)
@@ -392,3 +448,9 @@ async def test_large_file_handling(blob_service_client, table_service_client, la
     retrieved_entity = table_client.get_entity("AudioFiles", blob_name)
     assert retrieved_entity["transcriptId"] == transcript.id
     assert retrieved_entity["audioUrl"] == blob_client.url
+    assert retrieved_entity["blobSize"] == blob_client.get_blob_properties().size
+    assert retrieved_entity["blobContentType"] == blob_client.get_blob_properties().content_settings.content_type
+    assert retrieved_entity["blobLastModified"] == blob_client.get_blob_properties().last_modified.isoformat()
+    assert retrieved_entity["blobETag"] == blob_client.get_blob_properties().etag
+    assert retrieved_entity["blobLeaseState"] == blob_client.get_blob_properties().lease.state
+    assert retrieved_entity["blobLeaseStatus"] == blob_client.get_blob_properties().lease.status

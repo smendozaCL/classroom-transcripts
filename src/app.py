@@ -170,8 +170,17 @@ def upload_to_azure(file):
 
         # Verify the blob exists by trying to get its properties
         try:
-            blob_client.get_blob_properties()
-            return blob
+            blob_properties = blob_client.get_blob_properties()
+            return {
+                "blob": blob,
+                "blob_name": file.name,
+                "blob_size": blob_properties.size,
+                "blob_content_type": blob_properties.content_settings.content_type,
+                "blob_last_modified": blob_properties.last_modified,
+                "blob_etag": blob_properties.etag,
+                "blob_lease_state": blob_properties.lease.state,
+                "blob_lease_status": blob_properties.lease.status,
+            }
         except Exception as e:
             logging.error(f"Error uploading to Azure: {e}")
             return False
@@ -194,7 +203,7 @@ async def submit_transcription(file: UploadedFile) -> aai.TranscriptStatus:
                 transcript = transcript_future.result()
                 logging.info(
                     f"Got immediate transcription result for {file.name} with ID {transcript.id}")
-                await store_mapping_in_table(file.name, transcript.id, transcript.audio_url)
+                await store_mapping_in_table(file.name, transcript.id, transcript.audio_url, file.metadata)
 
                 # Verify mapping was stored
                 mapping = await get_transcript_mapping(file.name)
@@ -220,7 +229,7 @@ async def submit_transcription(file: UploadedFile) -> aai.TranscriptStatus:
             transcript = transcript_future.result()
             logging.info(
                 f"Got delayed transcription result for {file.name} with ID {transcript.id}")
-            await store_mapping_in_table(file.name, transcript.id, transcript.audio_url)
+            await store_mapping_in_table(file.name, transcript.id, transcript.audio_url, file.metadata)
 
             # Verify mapping was stored
             mapping = await get_transcript_mapping(file.name)
@@ -243,7 +252,7 @@ async def submit_transcription(file: UploadedFile) -> aai.TranscriptStatus:
         return aai.TranscriptStatus.error
 
 
-async def store_mapping_in_table(blob_name, transcript_id, audio_url):
+async def store_mapping_in_table(blob_name, transcript_id, audio_url, blob_metadata):
     try:
         table_service_client = TableServiceClient.from_connection_string(
             os.getenv("AZURE_STORAGE_CONNECTION_STRING"))
@@ -256,6 +265,12 @@ async def store_mapping_in_table(blob_name, transcript_id, audio_url):
         entity["transcriptId"] = transcript_id
         entity["audioUrl"] = audio_url
         entity["uploadTime"] = datetime.utcnow().isoformat()
+        entity["blobSize"] = blob_metadata["blob_size"]
+        entity["blobContentType"] = blob_metadata["blob_content_type"]
+        entity["blobLastModified"] = blob_metadata["blob_last_modified"].isoformat()
+        entity["blobETag"] = blob_metadata["blob_etag"]
+        entity["blobLeaseState"] = blob_metadata["blob_lease_state"]
+        entity["blobLeaseStatus"] = blob_metadata["blob_lease_status"]
 
         table_client.create_entity(entity=entity)
         logging.info(
@@ -277,7 +292,13 @@ async def get_transcript_mapping(blob_name):
             return {
                 "transcriptId": entity["transcriptId"],
                 "audioUrl": entity["audioUrl"],
-                "uploadTime": entity["uploadTime"]
+                "uploadTime": entity["uploadTime"],
+                "blobSize": entity["blobSize"],
+                "blobContentType": entity["blobContentType"],
+                "blobLastModified": entity["blobLastModified"],
+                "blobETag": entity["blobETag"],
+                "blobLeaseState": entity["blobLeaseState"],
+                "blobLeaseStatus": entity["blobLeaseStatus"],
             }
         except Exception as e:
             logging.warning(f"No mapping found for blob {blob_name}: {e}")
@@ -326,7 +347,8 @@ with st.container(border=True):
 
 
 async def handle_upload(uploaded_file: UploadedFile):
-    if upload_to_azure(uploaded_file):
+    blob_metadata = upload_to_azure(uploaded_file)
+    if blob_metadata:
         with st.spinner("Submitting for transcription..."):
             status = await submit_transcription(uploaded_file)
             logging.info(
