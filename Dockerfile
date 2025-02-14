@@ -10,8 +10,10 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
+COPY . .
+
 # Install dependencies
-RUN uv pip install --system
+RUN uv pip install -r pyproject.toml
 
 # Creates a non-root user with an explicit UID and adds permission to access the workspace
 # For more info, please refer to https://aka.ms/vscode-docker-python-configure-containers
