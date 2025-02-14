@@ -13,10 +13,13 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv package manager directly
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+# Install uv package manager directly and add to PATH
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    echo 'export PATH="/root/.local/bin:$PATH"' >> ~/.bashrc && \
+    . ~/.bashrc
 
 # Install dependencies
+ENV PATH="/root/.local/bin:$PATH"
 RUN uv sync
 
 # Copy application code
