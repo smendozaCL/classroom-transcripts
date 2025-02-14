@@ -10,10 +10,7 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-
-=======
 # Install dependencies
-
 RUN uv pip compile pyproject.toml -o requirements.txt
 RUN uv pip install -r requirements.txt --system
 
