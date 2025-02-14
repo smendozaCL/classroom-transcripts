@@ -4,10 +4,17 @@ FROM ghcr.io/astral-sh/uv:0.5.31-python3.13-bookworm-slim
 # Set working directory to where the src module will be
 WORKDIR /workspace
 
-# Copy all files
-COPY . .
 
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+
+=======
 # Install dependencies
+RUN uv venv
+RUN source .venv/bin/activate
 RUN uv pip compile pyproject.toml -o requirements.txt
 RUN uv pip install -r requirements.txt
 
