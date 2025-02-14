@@ -4,15 +4,11 @@ FROM ghcr.io/astral-sh/uv:0.5.31-python3.13-bookworm-slim
 # Set working directory to where the src module will be
 WORKDIR /workspace
 
-# Copy configuration files
-COPY pyproject.toml .
-COPY uv.lock .
+# Copy all files
+COPY . .
 
 # Install dependencies
 RUN uv sync --frozen
-
-# Copy application code
-COPY src/ src/
 
 # Creates a non-root user with an explicit UID and adds permission to access the workspace
 # For more info, please refer to https://aka.ms/vscode-docker-python-configure-containers
