@@ -17,6 +17,12 @@ import sys
 
 load_dotenv()
 
+# Configure debug settings
+DEBUG = bool(os.getenv("DEBUG"))
+if DEBUG:
+    logging.basicConfig(level=logging.DEBUG)
+    st.write("Debug mode enabled")
+
 # Add src directory to Python path
 src_path = Path(__file__).parent
 sys.path.append(str(src_path))
@@ -37,5 +43,16 @@ dashboard_page = st.Page(
     url_path="/dashboard",
 )
 
-pages = st.navigation([upload_page, dashboard_page])
+# Build pages list based on debug setting
+pages_list = [upload_page, dashboard_page]
+if DEBUG:
+    debug_page = st.Page(
+        "debug_table.py",
+        title="Debug Table",
+        icon="🔍",
+        url_path="/debug",
+    )
+    pages_list.append(debug_page)
+
+pages = st.navigation(pages_list)
 pages.run()

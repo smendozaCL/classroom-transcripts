@@ -226,7 +226,7 @@ if org_name := os.getenv("ORGANIZATION_NAME"):
 
 st.subheader("Upload a Class Recording")
 st.write(
-    "We'll generate a transcript and post it to Google Drive for you and your coach."
+    "We'll generate a transcript and post it for you and your coach."
 )
 
 
@@ -252,55 +252,34 @@ def upload_to_azure(file):
 
 async def submit_transcription(file: UploadedFile) -> str:
     try:
-        transcriber = aai.Transcriber(config=transcription_config)
+        # Get the callback URL from environment
+        callback_url = os.getenv("ASSEMBLYAI_CALLBACK_URL")
+        
+        # Configure transcription with webhook if available
+        config = transcription_config
+        if callback_url:
+            config = config.set_webhook(callback_url)
+            logging.info(f"Using callback URL: {callback_url}")
+            
+        transcriber = aai.Transcriber(config=config)
+        
+        # Reset file pointer to beginning and read fresh data
+        file.seek(0)
         file_bytes = io.BytesIO(file.read())
         if file_bytes.getbuffer().nbytes > 0:
             logging.info(f"Starting transcription for file: {file.name}")
-            transcript_future = transcriber.transcribe_async(file_bytes)
+            
+            # Submit transcription request without polling for completion
+            transcript = transcriber.submit(file_bytes)
+            logging.info(f"Got transcription ID: {transcript.id}")
 
-            # Check if we got immediate status
-            if transcript_future.done():
-                transcript = transcript_future.result()
-                logging.info(
-                    f"Got immediate transcription result for {file.name} with ID {transcript.id}"
-                )
-                await store_mapping_in_table(
-                    file.name, transcript.id, transcript.audio_url
-                )
-
-                # Verify mapping was stored
-                mapping = await get_transcript_mapping(file.name)
-                if mapping:
-                    logging.info(f"Verified mapping for {file.name}: {mapping}")
-                else:
-                    logging.warning(f"Could not verify mapping for {file.name}")
-
-                return transcript.status
-
-            # If not, wait briefly for completion
-            try:
-                await asyncio.wait_for(
-                    asyncio.wrap_future(transcript_future), timeout=3
-                )
-            except asyncio.TimeoutError:
-                st.info(
-                    "This one might take a little longer - we'll post the transcript to Google Drive as soon as it's ready."
-                )
-
-            transcript = transcript_future.result()
-            logging.info(
-                f"Got delayed transcription result for {file.name} with ID {transcript.id}"
+            # Store the initial mapping without waiting for completion
+            await store_mapping_in_table(
+                file.name, transcript.id, transcript.audio_url
             )
-            await store_mapping_in_table(file.name, transcript.id, transcript.audio_url)
 
-            # Verify mapping was stored
-            mapping = await get_transcript_mapping(file.name)
-            if mapping:
-                logging.info(f"Verified mapping for {file.name}: {mapping}")
-            else:
-                logging.warning(f"Could not verify mapping for {file.name}")
-
-            return transcript.status
+            # Return queued status - webhook will handle completion
+            return aai.TranscriptStatus.queued
 
         else:
             logging.error("File is empty: %s", file.name)
@@ -412,18 +391,14 @@ if uploaded_file := st.file_uploader(
 ):
     if upload_to_azure(uploaded_file):
         with st.spinner("Submitting for transcription..."):
-            status = submit_transcription(uploaded_file)
-            logging.info(f"✅  '{uploaded_file.name}' submitted for transcription.")
-
-            if status == aai.TranscriptStatus.processing:
+            status = asyncio.run(submit_transcription(uploaded_file))
+            if status == aai.TranscriptStatus.queued:
+                st.success("✅ Transcription submitted successfully!")
                 st.info(
-                    "Transcription processing - you can close this window or upload another file"
+                    "We'll process that transcript and share it with your coach. You can close this window or upload another file."
                 )
-            elif status == aai.TranscriptStatus.completed:
-                st.success(
-                    "✅  Transcription complete! We'll post the transcript to Google Drive as soon as it's ready."
-                )
-            elif status == aai.TranscriptStatus.error:
+                logging.info(f"'{uploaded_file.name}' submitted for transcription.")
+            else:
                 st.error("Upload failed - please try again.")
                 logging.error(f"Transcription failed with status: {status}")
     else:
