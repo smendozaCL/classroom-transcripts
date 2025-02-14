@@ -88,17 +88,19 @@ aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
 
 # Configure AssemblyAI transcription settings
 transcription_config = aai.TranscriptionConfig(
-    speech_model=aai.SpeechModel.best,
-    iab_categories=True,
-    auto_chapters=True,
-    content_safety=True,
-    auto_highlights=True,
-    sentiment_analysis=True,
-    speaker_labels=True,
-    filter_profanity=True,
-    language_detection=True,
+    speaker_labels=True, # Enable speaker diarization
+    speech_model=aai.SpeechModel.best, # Use best speech model
+    iab_categories=True, # Enable IAB categories
+    auto_chapters=True, # Enable auto chapters
+    content_safety=True, # Enable content safety
+    auto_highlights=True, # Enable auto highlights
+    sentiment_analysis=True, # Enable sentiment analysis
+    filter_profanity=True, # Filter profanity
+    language_detection=False, # Disable language detection
+    language_code="en", # Set language to English
 ).set_redact_pii(
-    policies=[
+    policies=[ # Redact PII
+        # Occupation was not redacted because it's a common topic in the classroom
         aai.PIIRedactionPolicy.medical_condition,
         aai.PIIRedactionPolicy.email_address,
         aai.PIIRedactionPolicy.phone_number,

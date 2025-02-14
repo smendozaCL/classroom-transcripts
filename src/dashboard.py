@@ -32,10 +32,10 @@ if "transcription_settings" not in st.session_state:
     st.session_state.transcription_settings = {
         "language_code": "en",
         "speaker_labels": True,
+        "speakers_expected": 2,  # Default to 2 speakers
         "auto_highlights": False,
         "punctuate": True,
         "format_text": True,
-        "dual_channel": False,
         "content_safety": False,
         "filter_profanity": False,
         "disfluencies": False,
@@ -44,9 +44,23 @@ if "transcription_settings" not in st.session_state:
         "entity_detection": False,
         "redact_pii": False,
         "redact_pii_audio": False,
-        "redact_pii_policies": [],
-        "redact_pii_sub": "entity_type"
+        "redact_pii_policies": [
+            "person_name",
+            "email_address",
+            "phone_number",
+            "location",
+            "organization",
+            "credit_card_number",
+            "credit_card_cvv",
+            "banking_information",
+            "us_social_security_number",
+            "medical_condition",
+        ],  # Default PII policies including financial and medical items
+        "redact_pii_sub": "entity_type",
+        "word_boost": []  # Initialize empty word boost list
     }
+if "transcription_settings_form" not in st.session_state:
+    st.session_state.transcription_settings_form = st.session_state.transcription_settings.copy()
 
 # Initialize debug mode from secrets
 # DEBUG = st.secrets.get("DEBUG", False)  # Default to False if not set
@@ -320,12 +334,13 @@ def show():
                     processing_df = df[df["Status"] == "processing"]
                     error_df = df[df["Status"] == "error"]
 
-                    if len(processing_df) > 0:
-                        st.warning(
-                            f"{len(processing_df)} transcripts are still being processed."
-                        )
-                    if len(error_df) > 0:
-                        st.warning(f"{len(error_df)} transcripts have errors.")
+                    if DEBUG:
+                        if len(processing_df) > 0:
+                            st.warning(
+                                f"{len(processing_df)} transcripts are still being processed."
+                            )
+                        if len(error_df) > 0:
+                            st.warning(f"{len(error_df)} transcripts have errors.")
 
                 # Move filters to bottom of sidebar
                 with st.expander("🔍 Advanced Filters", expanded=False):
@@ -343,6 +358,197 @@ def show():
                         value=(datetime.now().date(), datetime.now().date()),
                         help="Filter transcripts by creation date",
                     )
+
+                # Settings section in sidebar
+                st.divider()
+                st.subheader("⚙️ Settings")
+                
+                # Core settings
+                st.write("**Core Settings**")
+                language = st.selectbox(
+                    "Language",
+                    options=["en", "es", "fr", "de", "it", "pt"],
+                    format_func=lambda x: {
+                        "en": "🇺🇸 English",
+                        "es": "🇪🇸 Spanish",
+                        "fr": "🇫🇷 French",
+                        "de": "🇩🇪 German",
+                        "it": "🇮🇹 Italian",
+                        "pt": "🇵🇹 Portuguese",
+                    }[x],
+                    key="form_language_code"
+                )
+                speaker_labels = st.toggle(
+                    "Speaker Detection",
+                    value=st.session_state.transcription_settings_form["speaker_labels"],
+                    key="form_speaker_labels"
+                )
+                
+                if speaker_labels:
+                    speakers_expected = st.number_input(
+                        "Expected Speakers",
+                        min_value=1,
+                        max_value=10,
+                        value=2,
+                        help="Approximate number of speakers expected in the recording"
+                    )
+                else:
+                    speakers_expected = None
+
+                # Privacy & Content settings
+                st.write("")
+                st.write("**Privacy & Content**")
+                content_safety = st.toggle(
+                    "Content Safety",
+                    value=False,
+                    help="Flag potentially unsafe content"
+                )
+                filter_profanity = st.toggle(
+                    "Filter Profanity",
+                    value=False,
+                    help="Replace profanity with ***"
+                )
+                redact_pii = st.toggle(
+                    "PII Redaction",
+                    value=False,
+                    help="Remove personal information"
+                )
+
+                # PII Settings
+                if redact_pii:
+                    with st.expander("🔒 PII Settings"):
+                        st.caption("Always redacted: Credit Card Numbers, Bank Account Information, Social Security Numbers")
+                        
+                        st.write("**👤 Personal Information**")
+                        pii_toggles = {
+                            "person_name": st.toggle("Names", True),
+                            "email_address": st.toggle("Email Addresses", True),
+                            "phone_number": st.toggle("Phone Numbers", True),
+                            "date_of_birth": st.toggle("Date of Birth", True),
+                            "person_age": st.toggle("Age", True),
+                            "occupation": st.toggle("Occupation", False, help="Redact mentions of jobs and professional roles"),
+                        }
+                        
+                        st.write("**🏢 Location & Organization**")
+                        pii_toggles.update({
+                            "location": st.toggle("Locations/Addresses", True),
+                            "organization": st.toggle("Organizations", True),
+                        })
+
+                        st.write("**🏥 Medical Information**")
+                        pii_toggles.update({
+                            "medical_condition": st.toggle("Medical Conditions", False, help="Redact mentions of medical conditions, diseases, and treatments"),
+                        })
+
+                # Advanced features
+                with st.expander("🔧 Advanced Features"):
+                    st.write("**Text Formatting**")
+                    format_text = st.toggle("Format Text", value=True)
+                    
+                    st.write("**Analysis Features**")
+                    auto_highlights = st.toggle("Auto Highlights", value=True)
+                    sentiment_analysis = st.toggle("Sentiment Analysis", value=False)
+                    entity_detection = st.toggle("Entity Detection", value=False)
+                    auto_chapters = st.toggle("Auto Chapters", value=False)
+                    disfluencies = st.toggle(
+                        "Exclude Disfluencies",
+                        value=False,
+                        help="Remove filler words like 'um', 'uh', 'er' from the transcript"
+                    )
+                    word_boost = st.text_area(
+                        "Custom Dictionary",
+                        placeholder="Enter custom words or spellings to boost recognition accuracy, separated by commas",
+                        help="Add domain-specific terms, proper names, or technical words to improve their recognition in the transcript"
+                    )
+
+                # Save and Re-transcribe buttons
+                st.divider()
+                if st.button("💾 Save Settings", type="primary", use_container_width=True):
+                    # Create a new dictionary for the updated settings
+                    new_settings = {
+                        "language_code": language,
+                        "speaker_labels": speaker_labels,
+                        "speakers_expected": speakers_expected if speaker_labels else None,
+                        "content_safety": content_safety,
+                        "redact_pii": redact_pii,
+                        "filter_profanity": filter_profanity,
+                        "auto_highlights": auto_highlights,
+                        "sentiment_analysis": sentiment_analysis,
+                        "entity_detection": entity_detection,
+                        "auto_chapters": auto_chapters,
+                        "disfluencies": disfluencies,
+                        "format_text": format_text,
+                        "word_boost": [w.strip() for w in word_boost.split(",")] if word_boost and word_boost.strip() else [],
+                        "redact_pii_audio": redact_pii,
+                        "redact_pii_sub": aai.types.PIISubstitutionPolicy.entity_name if redact_pii else None,
+                        "redact_pii_policies": [aai.PIIRedactionPolicy(p) for p in pii_toggles.keys() if pii_toggles[p]] if redact_pii else [
+                            aai.PIIRedactionPolicy.person_name,
+                            aai.PIIRedactionPolicy.email_address,
+                            aai.PIIRedactionPolicy.phone_number,
+                            aai.PIIRedactionPolicy.location,
+                            aai.PIIRedactionPolicy.organization,
+                            aai.PIIRedactionPolicy.credit_card_number,
+                            aai.PIIRedactionPolicy.credit_card_cvv,
+                            aai.PIIRedactionPolicy.banking_information,
+                            aai.PIIRedactionPolicy.us_social_security_number,
+                            aai.PIIRedactionPolicy.medical_condition,
+                        ]  # Default policies if none selected
+                    }
+                    
+                    # Update both session states
+                    st.session_state.transcription_settings = new_settings
+                    st.session_state.transcription_settings_form = new_settings
+                    st.success("✅ Settings saved successfully!")
+
+                if st.button("🔄 Re-transcribe", type="secondary", use_container_width=True):
+                    if not selected_id:
+                        st.error("Please select a transcript first")
+                    else:
+                        try:
+                            transcript = aai.Transcript.get_by_id(selected_id)
+                            if not transcript.audio_url:
+                                st.error("No audio URL available for this transcript")
+                                return
+                            
+                            # Use current settings from form
+                            config = aai.TranscriptionConfig(
+                                language_code=language,
+                                speaker_labels=speaker_labels,
+                                speakers_expected=speakers_expected if speaker_labels else None,
+                                content_safety=content_safety,
+                                redact_pii=redact_pii,
+                                filter_profanity=filter_profanity,
+                                auto_highlights=auto_highlights,
+                                sentiment_analysis=sentiment_analysis,
+                                entity_detection=entity_detection,
+                                auto_chapters=auto_chapters,
+                                disfluencies=disfluencies,
+                                format_text=format_text,
+                                word_boost=[w.strip() for w in word_boost.split(",")] if word_boost and word_boost.strip() else [],
+                                redact_pii_audio=redact_pii,
+                                redact_pii_sub=aai.types.PIISubstitutionPolicy.entity_name if redact_pii else None,
+                                redact_pii_policies=[aai.PIIRedactionPolicy(p) for p in pii_toggles.keys() if pii_toggles[p]] if redact_pii else [
+                                    aai.PIIRedactionPolicy.person_name,
+                                    aai.PIIRedactionPolicy.email_address,
+                                    aai.PIIRedactionPolicy.phone_number,
+                                    aai.PIIRedactionPolicy.location,
+                                    aai.PIIRedactionPolicy.organization,
+                                    aai.PIIRedactionPolicy.credit_card_number,
+                                    aai.PIIRedactionPolicy.credit_card_cvv,
+                                    aai.PIIRedactionPolicy.banking_information,
+                                    aai.PIIRedactionPolicy.us_social_security_number,
+                                    aai.PIIRedactionPolicy.medical_condition,
+                                ]  # Default policies if none selected
+                            )
+                            
+                            # Submit new transcription request
+                            new_transcript = transcriber.transcribe(
+                                transcript.audio_url,
+                                config=config
+                            )
+                            st.success(f"✅ New transcription started! ID: {new_transcript.id}")
+                        except Exception as e:
+                            st.error(f"Failed to start transcription: {str(e)}")
 
             # Main content - Detail View
             if selected_id:
@@ -362,13 +568,43 @@ def show():
                         # Show friendly date as title
                         st.header(f"Transcript {friendly_date}")
 
-                        # Main content tabs
+                        # Main content tabs - removed Settings tab
                         tab_list = [
                             "📝 Transcript",
-                            "💭 Insights",
+                            "💭 Insights"
                         ]
                         if DEBUG:
                             tab_list.append("🔍 Details")
+
+                        # Download options
+                        download_cols = st.columns([1, 1, 2])
+                        with download_cols[0]:
+                            if st.button("📥 Download Transcript", type="secondary"):
+                                # Prepare transcript content
+                                if transcript.utterances:
+                                    content = "\n\n".join(
+                                        [
+                                            f"{u.speaker} ({u.start / 1000:.1f}s - {u.end / 1000:.1f}s):\n{u.text}"
+                                            for u in transcript.utterances
+                                        ]
+                                    )
+                                else:
+                                    content = transcript.text or "No transcript text available"
+
+                                # Create download button
+                                st.download_button(
+                                    label="Save as TXT",
+                                    data=content,
+                                    file_name=f"transcript_{selected_id}.txt",
+                                    mime="text/plain",
+                                )
+
+                        with download_cols[1]:
+                            if transcript.audio_url and "blob.core.windows.net" in transcript.audio_url:
+                                # Get SAS URL for Azure blob storage
+                                download_url = get_blob_sas_url(transcript.audio_url)
+                                if download_url:
+                                    st.link_button("🔊 Download Audio", download_url, type="secondary")
 
                         tabs = st.tabs(tab_list)
 
@@ -388,35 +624,6 @@ def show():
                                 st.caption("Language")
                                 st.write(f"🌐 {getattr(transcript, 'language_code', 'en').upper()}")
                             
-                            # Download options
-                            download_cols = st.columns([1, 1, 2])
-                            with download_cols[0]:
-                                if st.button("📥 Download Transcript", type="secondary"):
-                                    # Prepare transcript content
-                                    if transcript.utterances:
-                                        content = "\n\n".join(
-                                            [
-                                                f"{u.speaker} ({u.start / 1000:.1f}s - {u.end / 1000:.1f}s):\n{u.text}"
-                                                for u in transcript.utterances
-                                            ]
-                                        )
-                                    else:
-                                        content = transcript.text or "No transcript text available"
-
-                                    # Create download button
-                                    st.download_button(
-                                        label="Save as TXT",
-                                        data=content,
-                                        file_name=f"transcript_{selected_id}.txt",
-                                        mime="text/plain",
-                                    )
-
-                            with download_cols[1]:
-                                if transcript.audio_url and "blob.core.windows.net" in transcript.audio_url:
-                                    # Get SAS URL for Azure blob storage
-                                    download_url = get_blob_sas_url(transcript.audio_url)
-                                    if download_url:
-                                        st.link_button("🔊 Download Audio", download_url, type="secondary")
                             
                             # Audio player
                             if transcript.audio_url and "blob.core.windows.net" in transcript.audio_url:
@@ -545,7 +752,7 @@ def show():
                                                 title='Conversation Flow'
                                             )
                                             
-                                            # Add brush selection for zooming
+                                            # Add brush selection for zoom
                                             brush = alt.selection_interval(
                                                 encodings=['x'],
                                                 name='brush'
@@ -579,245 +786,20 @@ def show():
                                             if DEBUG:
                                                 st.write("Error details:", str(e))
 
-                        # Then Speaker Statistics
-                        st.subheader("👥 Speaker Statistics")
-                        speaker_stats: dict[str, dict[str, int | float]] = {}
-                        stats_df = pd.DataFrame()  # Initialize empty DataFrame
-                        
-                        if transcript and transcript.utterances:
-                            for utterance in transcript.utterances:
-                                if not utterance.speaker:
-                                    continue
-                                    
-                                if utterance.speaker not in speaker_stats:
-                                    speaker_stats[utterance.speaker] = {
-                                        "word_count": 0,
-                                        "duration": 0,
-                                        "turns": 0
-                                    }
-
-                                speaker_stats[utterance.speaker]["word_count"] += len(utterance.text.split())
-                                speaker_stats[utterance.speaker]["duration"] += (utterance.end - utterance.start) / 1000
-                                speaker_stats[utterance.speaker]["turns"] += 1
-
-                            if speaker_stats:  # Only create DataFrame if we have stats
-                                stats_df = pd.DataFrame.from_dict(speaker_stats, orient="index")
-                                stats_df["words_per_minute"] = (stats_df["word_count"] / (stats_df["duration"] / 60)).round(1)
-                                stats_df = stats_df.round(2)
-
-                        st.dataframe(
-                            stats_df,
-                            column_config={
-                                "word_count": "Total Words",
-                                "duration": "Speaking Time (s)",
-                                "turns": "Speaking Turns",
-                                "words_per_minute": "Words per Minute",
-                            },
-                        )
-
-                        # Move settings to sidebar
-                        with st.sidebar:
-                            st.divider()
-                            
-                            # Show current transcript config
-                            st.subheader("📜 Current Transcript")
-                            current_config = {
-                                "Language": getattr(transcript.config, "language_code", "en").upper(),
-                                "Speaker Detection": getattr(transcript.config, "speaker_labels", True),
-                                "Expected Speakers": getattr(transcript.config, "speakers_expected", None),
-                                "Dual Channel": getattr(transcript.config, "dual_channel", False),
-                                "Content Safety": getattr(transcript.config, "content_safety", False),
-                                "Filter Profanity": getattr(transcript.config, "filter_profanity", False),
-                                "PII Redaction": getattr(transcript.config, "redact_pii", False),
-                                "PII Policies": getattr(transcript.config, "redact_pii_policies", []),
-                            }
-                            
-                            # Display current config in an expander
-                            with st.expander("View Current Settings", expanded=False):
-                                for key, value in current_config.items():
-                                    if isinstance(value, bool):
-                                        st.write(f"**{key}:** {'✅' if value else '❌'}")
-                                    elif isinstance(value, list) and value:
-                                        st.write(f"**{key}:** {', '.join(value)}")
-                                    elif value is not None:
-                                        st.write(f"**{key}:** {value}")
-                            
-                            st.divider()
-                            st.subheader("⚙️ New Settings")
-                            
-                            # Core settings in a clean layout
-                            st.write("**Core Settings**")
-                            language = st.selectbox(
-                                "Language",
-                                options=["en", "es", "fr", "de", "it", "pt"],
-                                format_func=lambda x: {
-                                    "en": "🇺🇸 English",
-                                    "es": "🇪🇸 Spanish",
-                                    "fr": "🇫🇷 French",
-                                    "de": "🇩🇪 German",
-                                    "it": "🇮🇹 Italian",
-                                    "pt": "🇵🇹 Portuguese",
-                                }[x],
-                                key="form_language_code"
-                            )
-                            speaker_labels = st.toggle(
-                                "Speaker Detection",
-                                value=st.session_state.transcription_settings_form["speaker_labels"],
-                                key="form_speaker_labels"
-                            )
-                            
-                            if speaker_labels:
-                                speakers_expected = st.number_input(
-                                    "Expected Speakers",
-                                    min_value=1,
-                                    max_value=10,
-                                    value=st.session_state.transcription_settings_form["speakers_expected"],
-                                    help="Approximate number of speakers expected"
-                                )
-                            
-                            dual_channel = st.toggle(
-                                "Dual Channel",
-                                value=getattr(transcript.config, "dual_channel", False),
-                                help="Process left/right channels separately"
-                            )
-                            
-                            # Privacy & Content settings
-                            st.write("")  # Spacing
-                            st.write("**Privacy & Content**")
-                            content_safety = st.toggle(
-                                "Content Safety",
-                                value=getattr(transcript.config, "content_safety", False),
-                                help="Flag potentially unsafe content"
-                            )
-                            filter_profanity = st.toggle(
-                                "Filter Profanity",
-                                value=getattr(transcript.config, "filter_profanity", False),
-                                help="Replace profanity with ***"
-                            )
-                            redact_pii = st.toggle(
-                                "PII Redaction",
-                                value=getattr(transcript.config, "redact_pii", False),
-                                help="Remove personal information"
-                            )
-                            
-                            if redact_pii:
-                                with st.expander("Configure PII Settings"):
-                                    # Count enabled PII types from session state
-                                    current_pii_types = st.session_state.transcription_settings.get("redact_pii_policies", [])
-                                    
-                                    st.write("**👤 Personal Information**")
-                                    pii_toggles = {
-                                        "person_name": st.toggle("Names", "person_name" in current_pii_types),
-                                        "email_address": st.toggle("Email Addresses", "email_address" in current_pii_types),
-                                        "phone_number": st.toggle("Phone Numbers", "phone_number" in current_pii_types),
-                                        "date_of_birth": st.toggle("Date of Birth", "date_of_birth" in current_pii_types),
-                                        "person_age": st.toggle("Age", "person_age" in current_pii_types),
-                                    }
-                                    
-                                    st.write("**🏢 Location & Organization**")
-                                    pii_toggles.update({
-                                        "location": st.toggle("Locations/Addresses", "location" in current_pii_types),
-                                        "organization": st.toggle("Organizations", "organization" in current_pii_types),
-                                    })
-                                    
-                                    st.write("**💳 Financial & ID Numbers**")
-                                    pii_toggles.update({
-                                        "credit_card_number": st.toggle("Credit Card Numbers", "credit_card_number" in current_pii_types),
-                                        "banking_information": st.toggle("Banking Information", "banking_information" in current_pii_types),
-                                        "us_social_security_number": st.toggle("SSN", "us_social_security_number" in current_pii_types),
-                                    })
-                            
-                            # Advanced features in expander
-                            with st.expander("Advanced Features"):
-                                st.write("**Analysis Features**")
-                                auto_highlights = st.toggle("Auto Highlights", value=True)
-                                sentiment_analysis = st.toggle("Sentiment Analysis", value=False)
-                                entity_detection = st.toggle("Entity Detection", value=False)
-                                auto_chapters = st.toggle("Auto Chapters", value=False)
-                                disfluencies = st.toggle("Include Disfluencies", value=False)
-                                word_boost = st.text_area(
-                                    "Boost Words",
-                                    placeholder="Enter words to boost, separated by commas",
-                                    help="Improve recognition of specific terms"
-                                )
-                            
-                            # Save and Re-transcribe buttons
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                if st.button("💾 Save Settings", type="primary", use_container_width=True):
-                                    # Create a new dictionary for the updated settings
-                                    new_settings = {
-                                        "language_code": language,
-                                        "speaker_labels": speaker_labels,
-                                        "speakers_expected": speakers_expected if speaker_labels else None,
-                                        "dual_channel": dual_channel,
-                                        "content_safety": content_safety,
-                                        "redact_pii": redact_pii,
-                                        "filter_profanity": filter_profanity,
-                                        "auto_highlights": auto_highlights,
-                                        "sentiment_analysis": sentiment_analysis,
-                                        "entity_detection": entity_detection,
-                                        "auto_chapters": auto_chapters,
-                                        "disfluencies": disfluencies,
-                                        "word_boost": [w.strip() for w in word_boost.split(",")] if word_boost and word_boost.strip() else [],
-                                        "redact_pii_audio": redact_pii,
-                                        "redact_pii_sub": aai.types.PIISubstitutionPolicy.entity_name if redact_pii else None,
-                                        "redact_pii_policies": [aai.PIIRedactionPolicy(p) for p in pii_toggles.keys() if pii_toggles[p]] if redact_pii else None
-                                    }
-                                    
-                                    # Update both session states
-                                    st.session_state.transcription_settings = new_settings
-                                    st.session_state.transcription_settings_form = new_settings
-                                    st.success("✅ Settings saved successfully!")
-                            
-                            with col2:
-                                if st.button("🔄 Re-transcribe", type="secondary", use_container_width=True):
-                                    if transcript.audio_url:
-                                        try:
-                                            # Use current settings from form
-                                            config = aai.TranscriptionConfig(
-                                                language_code=language,
-                                                speaker_labels=speaker_labels,
-                                                speakers_expected=speakers_expected if speaker_labels else None,
-                                                dual_channel=dual_channel,
-                                                content_safety=content_safety,
-                                                redact_pii=redact_pii,
-                                                filter_profanity=filter_profanity,
-                                                auto_highlights=auto_highlights,
-                                                sentiment_analysis=sentiment_analysis,
-                                                entity_detection=entity_detection,
-                                                auto_chapters=auto_chapters,
-                                                disfluencies=disfluencies,
-                                                word_boost=[w.strip() for w in word_boost.split(",")] if word_boost and word_boost.strip() else [],
-                                                redact_pii_audio=redact_pii,
-                                                redact_pii_sub=aai.types.PIISubstitutionPolicy.entity_name if redact_pii else None,
-                                                redact_pii_policies=[aai.PIIRedactionPolicy(p) for p in pii_toggles.keys() if pii_toggles[p]] if redact_pii else None
-                                            )
-                                            
-                                            # Submit new transcription request
-                                            new_transcript = transcriber.transcribe(
-                                                transcript.audio_url,
-                                                config=config
-                                            )
-                                            st.success(f"✅ New transcription started! ID: {new_transcript.id}")
-                                        except Exception as e:
-                                            st.error(f"Failed to start transcription: {str(e)}")
-                                    else:
-                                        st.error("No audio URL available for this transcript")
-
-                    else:
-                        st.warning(f"Transcript status: {transcript.status}")
-                        if transcript.status == aai.TranscriptStatus.error:
-                            st.error(
-                                "Transcription failed. Please check the logs for details."
-                            )
-                        elif transcript.status in [
-                            aai.TranscriptStatus.queued,
-                            aai.TranscriptStatus.processing,
-                        ]:
-                            st.info(
-                                "Transcript is still being processed. Please check back later."
-                            )
+                        if DEBUG:
+                            with tabs[2]:  # Debug tab
+                                st.write("Debug information:")
+                                st.write(f"Transcript ID: {transcript.id}")
+                                st.write(f"Status: {transcript.status}")
+                                st.write(f"Audio URL: {transcript.audio_url}")
+                                st.write(f"Text: {transcript.text}")
+                                st.write(f"Words: {len(transcript.words) if transcript.words else 0}")
+                                st.write(f"Utterances: {len(transcript.utterances) if transcript.utterances else 0}")
+                                st.write(f"Language: {getattr(transcript, 'language_code', 'en').upper()}")
+                                st.write(f"Confidence: {getattr(transcript, 'confidence', 'N/A')}")
+                                st.write(f"Duration: {format_duration(transcript.audio_duration) if transcript.audio_duration else 'N/A'}")
+                                created_date = df[df['ID'] == selected_id]['Created'].iloc[0]
+                                st.write(f"Created: {format_date_with_timezone(created_date)}")
 
                 except Exception as e:
                     st.error(f"Error loading transcript details: {str(e)}")
