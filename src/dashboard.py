@@ -761,7 +761,7 @@ def show():
                                         "disfluencies": disfluencies,
                                         "word_boost": [w.strip() for w in word_boost.split(",")] if word_boost and word_boost.strip() else [],
                                         "redact_pii_audio": redact_pii,
-                                        "redact_pii_sub": aai.types.PIISubstitutionPolicy.entity_type if redact_pii else None,
+                                        "redact_pii_sub": aai.types.PIISubstitutionPolicy.entity_name if redact_pii else None,
                                         "redact_pii_policies": [aai.PIIRedactionPolicy(p) for p in pii_toggles.keys() if pii_toggles[p]] if redact_pii else None
                                     }
                                     
@@ -790,7 +790,7 @@ def show():
                                                 disfluencies=disfluencies,
                                                 word_boost=[w.strip() for w in word_boost.split(",")] if word_boost and word_boost.strip() else [],
                                                 redact_pii_audio=redact_pii,
-                                                redact_pii_sub=aai.types.PIISubstitutionPolicy.entity_type if redact_pii else None,
+                                                redact_pii_sub=aai.types.PIISubstitutionPolicy.entity_name if redact_pii else None,
                                                 redact_pii_policies=[aai.PIIRedactionPolicy(p) for p in pii_toggles.keys() if pii_toggles[p]] if redact_pii else None
                                             )
                                             

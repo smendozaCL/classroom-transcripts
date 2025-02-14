@@ -376,47 +376,43 @@ async def get_transcript_mapping(blob_name):
         return None
 
 
-with st.container(border=True):
-    uploaded_file = st.file_uploader(
-        "Choose an audio file",
-        type=[
-            "3ga",
-            "8svx",
-            "aac",
-            "ac3",
-            "aif",
-            "aiff",
-            "alac",
-            "amr",
-            "ape",
-            "au",
-            "dss",
-            "flac",
-            "flv",
-            "m4a",
-            "m4b",
-            "m4p",
-            "m4r",
-            "mp3",
-            "mpga",
-            "ogg",
-            "oga",
-            "mogg",
-            "opus",
-            "qcp",
-            "tta",
-            "voc",
-            "wav",
-            "wma",
-            "wv",
-        ],
-    )
-
-
-async def handle_upload(uploaded_file: UploadedFile):
+if uploaded_file := st.file_uploader(
+    "Choose an audio file",
+    type=[
+        "3ga",
+        "8svx",
+        "aac",
+        "ac3",
+        "aif",
+        "aiff",
+        "alac",
+        "amr",
+        "ape",
+        "au",
+        "dss",
+        "flac",
+        "flv",
+        "m4a",
+        "m4b",
+        "m4p",
+        "m4r",
+        "mp3",
+        "mpga",
+        "ogg",
+        "oga",
+        "mogg",
+        "opus",
+        "qcp",
+        "tta",
+        "voc",
+        "wav",
+        "wma",
+        "wv",
+    ],
+):
     if upload_to_azure(uploaded_file):
         with st.spinner("Submitting for transcription..."):
-            status = await submit_transcription(uploaded_file)
+            status = submit_transcription(uploaded_file)
             logging.info(f"✅  '{uploaded_file.name}' submitted for transcription.")
 
             if status == aai.TranscriptStatus.processing:
@@ -432,10 +428,6 @@ async def handle_upload(uploaded_file: UploadedFile):
                 logging.error(f"Transcription failed with status: {status}")
     else:
         st.error("Upload to storage failed - please try again")
-
-
-if uploaded_file is not None:
-    asyncio.run(handle_upload(uploaded_file))
 
 
 if feedback_email := os.getenv("FEEDBACK_EMAIL"):
