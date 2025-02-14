@@ -30,10 +30,12 @@ def view_transcript_mappings():
                 for key in ["AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET"]
             ):
                 credential = ClientSecretCredential(
-                    tenant_id=os.getenv("AZURE_TENANT_ID"),
-                    client_id=os.getenv("AZURE_CLIENT_ID"),
-                    client_secret=os.getenv("AZURE_CLIENT_SECRET"),
+                    tenant_id=os.getenv("AZURE_TENANT_ID") or "",
+                    client_id=os.getenv("AZURE_CLIENT_ID") or "",
+                    client_secret=os.getenv("AZURE_CLIENT_SECRET") or "",
                 )
+            else:
+                raise ValueError("Azure credentials are not available")
 
             # Create the table service client
             table_service = TableServiceClient(
