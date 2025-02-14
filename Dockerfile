@@ -1,37 +1,31 @@
 # For more information, please refer to https://aka.ms/vscode-docker-python
 FROM python:3.13-slim
 
-WORKDIR /app
+# Set working directory to where the src module will be
+WORKDIR /workspace
 
 # Copy configuration files
 COPY pyproject.toml .
-COPY requirements.txt .
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies and create virtual environment
-RUN python -m pip install --upgrade pip
-RUN python -m pip install uv
+# Install uv package manager directly
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Create virtual environment and install dependencies
-RUN python -m venv .venv
-ENV VIRTUAL_ENV=/app/.venv
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-
-# Install dependencies using pip and uv in the virtual environment
-RUN pip install uv
-RUN uv pip install -r requirements.txt
+# Install dependencies
+RUN uv sync
 
 # Copy application code
-COPY . /src/app
+COPY . .
 
-# Creates a non-root user with an explicit UID and adds permission to access the /app folder
+# Creates a non-root user with an explicit UID and adds permission to access the workspace
 # For more info, please refer to https://aka.ms/vscode-docker-python-configure-containers
-RUN adduser -u 5678 --disabled-password --gecos "" appuser && chown -R appuser /app
+RUN adduser -u 5678 --disabled-password --gecos "" appuser && chown -R appuser /workspace
 USER appuser
 
 # During debugging, this entry point will be overridden. For more information, please refer to https://aka.ms/vscode-docker-python-debug
-CMD ["streamlit", "run", "src/app.py", "--server.port=8501"]
+CMD ["streamlit", "run", "src/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
