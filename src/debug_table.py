@@ -140,6 +140,9 @@ def load_table_data(_table_client):
 
     for i, item in enumerate(items):
         item_dict = dict(item)
+        # Debug information
+        print(f"Item keys: {item_dict.keys()}")  # Debug line
+        print(f"Item content: {item_dict}")  # Debug line
 
         # Add formatted size
         if "blobSize" in item_dict:
@@ -155,18 +158,29 @@ def load_table_data(_table_client):
 
         item_dict["_previous_status"] = item_dict["status"]
 
-        # Process timestamp
-        if "uploadTime" not in item_dict:
-            item_dict["uploadTime"] = item_dict.get("Timestamp", datetime.min)
-
-        try:
-            dt = datetime.fromisoformat(
-                item_dict["uploadTime"].replace('Z', '+00:00'))
-            local_dt = dt.astimezone(local_tz)
-            item_dict["_timestamp"] = local_dt
-            item_dict["uploadTime"] = local_dt
-        except ValueError as e:
-            st.error(f"Error parsing time: {e}")
+        # Process timestamp - use Timestamp if uploadTime is not available
+        timestamp = item_dict.get("uploadTime", item_dict.get("Timestamp"))
+        if timestamp is None:
+            # Create timezone-aware minimum datetime
+            timestamp = datetime.min.replace(tzinfo=pytz.UTC)
+            item_dict["uploadTime"] = timestamp
+            item_dict["_timestamp"] = timestamp
+        else:
+            try:
+                if isinstance(timestamp, str):
+                    dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                else:
+                    # Ensure timestamp has timezone if it doesn't
+                    dt = timestamp if timestamp.tzinfo else timestamp.replace(tzinfo=pytz.UTC)
+                local_dt = dt.astimezone(local_tz)
+                item_dict["_timestamp"] = local_dt
+                item_dict["uploadTime"] = local_dt
+            except ValueError as e:
+                st.error(f"Error parsing time: {e}")
+                # Use timezone-aware minimum datetime as fallback
+                fallback_dt = datetime.min.replace(tzinfo=pytz.UTC)
+                item_dict["_timestamp"] = fallback_dt
+                item_dict["uploadTime"] = fallback_dt
 
         items_list.append(item_dict)
 
@@ -182,9 +196,8 @@ with st.spinner("Loading table data..."):
     items_list = load_table_data(table_client)
 
 if items_list:
-    # Sort by timestamp
-    items_list.sort(key=lambda x: x.get(
-        "_timestamp", datetime.min), reverse=True)
+    # Sort by timestamp with timezone-aware fallback
+    items_list.sort(key=lambda x: x.get("_timestamp", datetime.min.replace(tzinfo=pytz.UTC)), reverse=True)
 
     # Define column order
     columns = [
