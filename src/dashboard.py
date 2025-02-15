@@ -17,6 +17,7 @@ from azure.identity import DefaultAzureCredential
 from datetime import timedelta
 import altair as alt
 from src.utils.azure_storage import get_blob_sas_url
+from src.upload import get_account_key_from_connection_string
 
 # Configure AssemblyAI
 aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
@@ -203,6 +204,22 @@ def get_blob_sas_url_cached(audio_url: str) -> Optional[str]:
         if "blob.core.windows.net" not in audio_url:
             st.warning("Audio file not in Azure storage")
             return None
+            
+        # If URL already has a SAS token, return it as is
+        if "?st=" in audio_url:
+            return audio_url
+
+        # Get storage account key from connection string
+        connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+        if not connection_string:
+            st.error("Missing Azure Storage connection string")
+            return None
+            
+        # Get account key using utility function
+        storage_account_key = get_account_key_from_connection_string(connection_string)
+        if not storage_account_key:
+            st.error("Could not extract storage account key from connection string")
+            return None
 
         # Parse URL to get account, container, and blob
         parts = audio_url.split("/")
@@ -214,7 +231,8 @@ def get_blob_sas_url_cached(audio_url: str) -> Optional[str]:
         return get_blob_sas_url(
             blob_name=blob_name,
             container_name=container_name,
-            storage_account=account
+            storage_account=account,
+            storage_account_key=storage_account_key
         )
 
     except Exception as e:
