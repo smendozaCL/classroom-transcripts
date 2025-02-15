@@ -1,5 +1,5 @@
 {
-  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.typeCheckingMode": "off",
   "azureFunctions.deploySubpath": ".",
   "azureFunctions.scmDoBuildDuringDeployment": true,
   "azureFunctions.pythonVenv": ".venv",
@@ -32,5 +32,6 @@
       "containerApp": "classroom-transcripts-dev",
       "containerRegistry": "containerappswest7e0940"
     }
-  ]
+  ],
+  "python.analysis.autoImportCompletions": true
 }
