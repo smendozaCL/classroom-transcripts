@@ -360,6 +360,7 @@ if uploaded_file := st.file_uploader(
 
         # Create the Markdown link
         markdown_link = f"[{upload_result['original_name']}]({safe_url})"
+        st.success(f"Uploaded file to Azure: {markdown_link}")
         transcript = asyncio.run(submit_transcription(safe_url))
         if transcript["status"] == "queued":
             # Store mapping in table
