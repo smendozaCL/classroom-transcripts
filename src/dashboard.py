@@ -9,7 +9,6 @@ import pytz
 from src.utils.google_drive import upload_transcript_to_drive
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
-from src.utils.transcript_mapping import TranscriptMapper
 import numpy as np
 import requests
 from typing import Optional
