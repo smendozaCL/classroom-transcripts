@@ -1,12 +1,12 @@
 import streamlit as st
-from utils.view_table import get_table_client, list_table_items
+from src.utils.view_table import get_table_client, list_table_items
 from datetime import datetime
 from operator import itemgetter
 import pytz
 import time
 import assemblyai as aai
 import os
-from azure.data.tables import UpdateMode
+from azure.data.tables import UpdateMode, TableClient
 
 # Initialize session state for status values if not already set
 if "transcription_statuses" not in st.session_state:
@@ -369,3 +369,13 @@ with st.expander("Delete Items"):
                     st.error(f"Delete error: {str(e)}")
             else:
                 st.error("Partition Key is required")
+
+def list_all_mappings():
+    connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    table_client = TableClient.from_connection_string(
+        connection_string, 
+        table_name="TranscriptMappings"
+    )
+    
+    entities = table_client.list_entities()
+    return [entity for entity in entities]

@@ -8,9 +8,10 @@ from azure.storage.blob import BlobServiceClient, BlobSasPermissions
 from azure.data.tables import TableServiceClient, TableEntity
 from datetime import datetime, timedelta
 import asyncio
-from utils.transcript_mapping import create_upload_entity
-from utils.azure_storage import get_blob_sas_url
+from src.utils.transcript_mapping import create_upload_entity, update_transcript_status
+from src.utils.azure_storage import get_blob_sas_url
 from urllib.parse import quote
+from src.utils.table_client import get_table_client
 
 
 def get_azure_credential():
@@ -285,43 +286,29 @@ async def submit_transcription(url: str) -> dict:
         }
 
 
-@st.cache_resource
-def get_table_client():
-    """Get a reusable table client."""
-    connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
-    if not connection_string:
-        raise ValueError(
-            "AZURE_STORAGE_CONNECTION_STRING environment variable not set"
-        )
-
-    table_service_client = TableServiceClient.from_connection_string(
-        connection_string
-    )
-    return table_service_client.get_table_client("TranscriptMappings")
-
-
 async def store_mapping_in_table(blob_dict: dict, transcript_dict: dict):
+    """Store the mapping between uploaded file and its transcript."""
     try:
         table_client = get_table_client()
-
-        # Use create_upload_entity with the unique blob name
+        
         entity = create_upload_entity(
-            blob_dict["name"], blob_dict["original_name"], transcript_dict["id"])
-
-        # Add additional properties
-        entity["originalFileName"] = blob_dict["original_name"]
+            blob_name=blob_dict["name"],
+            original_name=blob_dict["original_name"],
+            transcript_id=transcript_dict["id"]
+        )
+        
+        # Add additional metadata
         entity["etag"] = blob_dict["etag"]
         entity["lastModified"] = blob_dict["last_modified"]
-        entity["transcriptId"] = transcript_dict["id"]
-        entity["audioUrl"] = transcript_dict["audio_url"]
-        entity["status"] = transcript_dict["status"]
-
+        entity["blobSize"] = blob_dict["size"]
+        entity["audioUrl"] = transcript_dict["file_url"]
+        
         table_client.create_entity(entity=entity)
-        logging.info(
-            f"Stored mapping in table: {blob_dict['name']} -> {transcript_dict['id']} with status: {transcript_dict['status']}")
+        logging.info(f"Stored mapping: {blob_dict['name']} -> {transcript_dict['id']}")
 
     except Exception as e:
-        logging.error(f"Error storing mapping in table: {e}")
+        logging.error(f"Error storing mapping: {e}")
+        raise
 
 
 @st.cache_data

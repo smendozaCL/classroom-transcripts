@@ -48,18 +48,4 @@ def list_table_items(table_client):
 def view_transcript_mappings():
     """View all entries in the TranscriptMappings table."""
     table_client = get_table_client()
-    return list_table_items(table_client)
-
-
-if __name__ == "__main__":
-    items = view_transcript_mappings()
-    print("\nTranscript Mappings Table Contents:")
-    print("----------------------------------")
-    for item in items:
-        print(f"\nRow Key: {item['RowKey']}")
-        print(f"Partition Key: {item['PartitionKey']}")
-        print(f"Transcript ID: {item.get('transcriptId', 'N/A')}")
-        print(f"Status: {item.get('Status', 'N/A')}")
-        print(f"Upload Time: {item.get('uploadTime', 'N/A')}")
-        print(f"Audio URL: {item.get('audioUrl', 'N/A')}")
-        print("----------------------------------")
+    return list_table_items(table_client) 
