@@ -16,6 +16,10 @@ dependencies = [
     "scipy>=1.15.1",
     "numpy>=2.2.2",
     "azure-data-tables>=12.6.0",
+    "pandas",
+    "pytz",
+    "requests",
+    "wordcloud>=1.9.4",
 ]
 
 [build-system]
