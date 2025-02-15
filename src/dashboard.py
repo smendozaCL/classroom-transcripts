@@ -72,6 +72,27 @@ st.title("📚 Transcript Review Dashboard")
 # Initialize the transcriber
 transcriber = aai.Transcriber()
 
+# Use the same US timezone list and picker
+US_TIMEZONES = [
+    'US/Eastern',
+    'US/Central', 
+    'US/Mountain',
+    'US/Pacific',
+    'US/Alaska',
+    'US/Hawaii'
+]
+
+if "timezone" not in st.session_state:
+    st.session_state.timezone = 'US/Pacific'
+
+with st.sidebar:
+    st.session_state.timezone = st.selectbox(
+        "Select Timezone",
+        options=US_TIMEZONES,
+        index=US_TIMEZONES.index(st.session_state.timezone),
+        help="Choose your local timezone",
+        format_func=lambda x: x.replace('US/', '')
+    )
 
 def format_date_with_timezone(
     date_str, timezone_name="America/New_York", show_timezone=True
