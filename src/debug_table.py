@@ -6,6 +6,7 @@ import pytz
 import time
 import assemblyai as aai
 import os
+from azure.data.tables import UpdateMode
 
 # Initialize session state for status values if not already set
 if "transcription_statuses" not in st.session_state:
@@ -20,7 +21,7 @@ if "transcription_statuses" not in st.session_state:
 # US timezone options
 US_TIMEZONES = [
     'US/Eastern',
-    'US/Central', 
+    'US/Central',
     'US/Mountain',
     'US/Pacific',
     'US/Alaska',
@@ -48,6 +49,7 @@ local_tz = pytz.timezone(st.session_state.timezone)
 aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
 transcriber = aai.Transcriber()
 
+
 def format_file_size(size_in_bytes):
     """Convert bytes to human readable format"""
     if not isinstance(size_in_bytes, (int, float)):
@@ -59,16 +61,19 @@ def format_file_size(size_in_bytes):
     return f"{size_in_bytes:.2f} TB"
 
 # Get timezone abbreviation
+
+
 def get_timezone_abbr(tz):
     """Get timezone abbreviation (e.g., PST, EST)"""
     return datetime.now(pytz.timezone(tz)).strftime('%Z')
+
 
 def get_transcript_status(transcript_id):
     """Get transcript status from AssemblyAI"""
     # Skip test data
     if transcript_id.startswith('test_'):
         return "completed"
-        
+
     try:
         transcript = aai.Transcript.get_by_id(transcript_id)
         return transcript.status.value
@@ -78,10 +83,12 @@ def get_transcript_status(transcript_id):
         st.error(f"Error getting transcript status: {str(e)}")
         return "error"
 
+
 st.title("🔍 Audio Files & Transcriptions")
 
 # Initialize table client
 table_client = get_table_client()
+
 
 @st.cache_data(ttl=300)
 def get_transcript_statuses():
@@ -92,7 +99,7 @@ def get_transcript_statuses():
             limit=100  # Adjust limit as needed
         )
         response = transcriber.list_transcripts(params)
-        
+
         # Create mapping of transcript ID to status
         status_map = {}
         for t in response.transcripts:
@@ -101,7 +108,7 @@ def get_transcript_statuses():
                 status_map[t.id] = "completed"
             else:
                 status_map[t.id] = t.status.value
-                
+
         # Get next page if available
         while response.page_details.before_id_of_prev_url:
             params.before_id = response.page_details.before_id_of_prev_url
@@ -111,11 +118,12 @@ def get_transcript_statuses():
                     status_map[t.id] = "completed"
                 else:
                     status_map[t.id] = t.status.value
-                    
+
         return status_map
     except Exception as e:
         st.error(f"Error getting transcript statuses: {str(e)}")
         return {}
+
 
 @st.cache_data(ttl=300)
 def load_table_data(_table_client):
@@ -123,54 +131,60 @@ def load_table_data(_table_client):
     items = list_table_items(_table_client)
     if not items:
         return []
-    
+
     # Get all transcript statuses at once
     transcript_statuses = get_transcript_statuses()
-    
+
     items_list = []
     progress_bar = st.progress(0, "Processing items...")
-    
+
     for i, item in enumerate(items):
         item_dict = dict(item)
-        
+
         # Add formatted size
         if "blobSize" in item_dict:
-            item_dict["formatted_size"] = format_file_size(item_dict["blobSize"])
-        
+            item_dict["formatted_size"] = format_file_size(
+                item_dict["blobSize"])
+
         # Get status from cached transcript statuses
         if "transcriptId" in item_dict:
-            item_dict["status"] = transcript_statuses.get(item_dict["transcriptId"], "error")
+            item_dict["status"] = transcript_statuses.get(
+                item_dict["transcriptId"], "error")
         else:
             item_dict["status"] = "pending"
-            
+
         item_dict["_previous_status"] = item_dict["status"]
-        
+
         # Process timestamp
         if "uploadTime" not in item_dict:
             item_dict["uploadTime"] = item_dict.get("Timestamp", datetime.min)
-            
+
         try:
-            dt = datetime.fromisoformat(item_dict["uploadTime"].replace('Z', '+00:00'))
+            dt = datetime.fromisoformat(
+                item_dict["uploadTime"].replace('Z', '+00:00'))
             local_dt = dt.astimezone(local_tz)
             item_dict["_timestamp"] = local_dt
             item_dict["uploadTime"] = local_dt
         except ValueError as e:
             st.error(f"Error parsing time: {e}")
-            
+
         items_list.append(item_dict)
-        
+
         progress = (i + 1) / len(items)
-        progress_bar.progress(progress, f"Processing {i + 1} of {len(items)} items...")
-    
+        progress_bar.progress(
+            progress, f"Processing {i + 1} of {len(items)} items...")
+
     progress_bar.empty()
     return items_list
 
+
 with st.spinner("Loading table data..."):
     items_list = load_table_data(table_client)
-    
+
 if items_list:
     # Sort by timestamp
-    items_list.sort(key=lambda x: x.get("_timestamp", datetime.min), reverse=True)
+    items_list.sort(key=lambda x: x.get(
+        "_timestamp", datetime.min), reverse=True)
 
     # Define column order
     columns = [
@@ -187,8 +201,10 @@ if items_list:
     # Reorder dataframe columns and preserve status
     items_list = [{
         **{col: item.get(col) for col in columns},
-        "status": item.get("status", "pending"),  # Default to pending if no status
-        "_previous_status": item.get("status")  # Store original status for comparison
+        # Default to pending if no status
+        "status": item.get("status", "pending"),
+        # Store original status for comparison
+        "_previous_status": item.get("status")
     } for item in items_list]
 
     st.dataframe(
@@ -228,13 +244,14 @@ if items_list:
     # Add this after the dataframe display
     if st.button("Update Status"):
         progress_bar = st.progress(0, "Updating statuses...")
-        updates = [item for item in items_list if item.get("status") != item.get("_previous_status")]
-        
+        updates = [item for item in items_list if item.get(
+            "status") != item.get("_previous_status")]
+
         for i, item in enumerate(updates):
             try:
                 # Update the entity in the table
                 table_client.update_entity(
-                    mode="merge",
+                    mode=UpdateMode.MERGE,
                     entity={
                         "PartitionKey": item["PartitionKey"],
                         "RowKey": item["RowKey"],
@@ -243,11 +260,13 @@ if items_list:
                 )
                 # Update progress
                 progress = (i + 1) / len(updates)
-                progress_bar.progress(progress, f"Updated {i + 1} of {len(updates)} items...")
+                progress_bar.progress(
+                    progress, f"Updated {i + 1} of {len(updates)} items...")
                 st.success(f"Updated status for {item['RowKey']}")
             except Exception as e:
-                st.error(f"Error updating status for {item['RowKey']}: {str(e)}")
-        
+                st.error(
+                    f"Error updating status for {item['RowKey']}: {str(e)}")
+
         progress_bar.empty()  # Remove progress bar when done
 else:
     st.info("No files found in the system")
@@ -256,14 +275,16 @@ else:
 st.divider()
 st.subheader("🔎 Query Builder")
 query_type = st.selectbox(
-    "Query Type", ["All Items", "By Partition Key", "By Row Key", "Custom Filter"]
+    "Query Type", ["All Items", "By Partition Key",
+                   "By Row Key", "Custom Filter"]
 )
 
 if query_type == "By Partition Key":
     partition_key = st.text_input("Partition Key")
     if partition_key:
         try:
-            items = list_table_items(table_client, f"PartitionKey eq '{partition_key}'")
+            items = list_table_items(
+                f"PartitionKey eq '{partition_key}'")
             if items:
                 st.dataframe([dict(item) for item in items])
             else:
@@ -275,7 +296,7 @@ elif query_type == "By Row Key":
     row_key = st.text_input("Row Key")
     if row_key:
         try:
-            items = list_table_items(table_client, f"RowKey eq '{row_key}'")
+            items = list_table_items(f"RowKey eq '{row_key}'")
             if items:
                 st.dataframe([dict(item) for item in items])
             else:
@@ -289,7 +310,7 @@ elif query_type == "Custom Filter":
     )
     if filter_query:
         try:
-            items = list_table_items(table_client, filter_query)
+            items = list_table_items(filter_query)
             if items:
                 st.dataframe([dict(item) for item in items])
             else:
@@ -302,7 +323,8 @@ st.divider()
 st.subheader("⚙️ Table Operations")
 with st.expander("Delete Items"):
     st.warning("⚠️ Deletion operations are permanent")
-    delete_type = st.selectbox("Delete By", ["Single Item", "Partition Key", "Filter"])
+    delete_type = st.selectbox(
+        "Delete By", ["Single Item", "Partition Key", "Filter"])
 
     if delete_type == "Single Item":
         pk = st.text_input("Partition Key of item to delete")
@@ -322,10 +344,12 @@ with st.expander("Delete Items"):
         if st.button("Delete All Items in Partition", type="primary"):
             if pk:
                 try:
-                    items = list_table_items(table_client, f"PartitionKey eq '{pk}'")
+                    items = list_table_items(
+                        f"PartitionKey eq '{pk}'")
                     count = 0
                     for item in items:
-                        table_client.delete_entity(item["PartitionKey"], item["RowKey"])
+                        table_client.delete_entity(
+                            item["PartitionKey"], item["RowKey"])
                         count += 1
                     st.success(f"Deleted {count} items from partition {pk}")
                 except Exception as e:

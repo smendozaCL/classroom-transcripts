@@ -1,6 +1,8 @@
 from typing import Optional, Dict
 import json
 import os
+from azure.data.tables import TableEntity
+from datetime import datetime
 
 class TranscriptMapper:
     def __init__(self, mapping_file: str = "data/transcript_mapping.json"):
@@ -39,4 +41,24 @@ class TranscriptMapper:
         for tid, uri in self.mapping.items():
             if uri == file_uri:
                 return tid
-        return None 
+        return None
+
+def create_upload_entity(partition_key: str, file_name: str, transcript_id: str) -> TableEntity:
+    """
+    Create a table entity for mapping uploaded files to their transcription IDs.
+    
+    Args:
+        partition_key: Typically the date or another grouping key
+        file_name: Name of the uploaded file
+        transcript_id: AssemblyAI transcription ID
+    
+    Returns:
+        TableEntity: Entity ready to be inserted into Azure Table Storage
+    """
+    return TableEntity(
+        PartitionKey=partition_key,
+        RowKey=file_name,
+        TranscriptionId=transcript_id,
+        UploadTime=datetime.utcnow().isoformat(),
+        Status="queued"
+    ) 
