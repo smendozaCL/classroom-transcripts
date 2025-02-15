@@ -6,10 +6,10 @@ import os
 import plotly.express as px
 from assemblyai.types import ListTranscriptParameters
 import pytz
-from utils.google_drive import upload_transcript_to_drive
+from src.utils.google_drive import upload_transcript_to_drive
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
-from utils.transcript_mapping import TranscriptMapper
+from src.utils.transcript_mapping import TranscriptMapper
 import numpy as np
 import requests
 from typing import Optional
@@ -17,7 +17,7 @@ from azure.storage.blob import BlobServiceClient
 from azure.identity import DefaultAzureCredential
 from datetime import timedelta
 import altair as alt
-from utils.azure_storage import get_blob_sas_url
+from src.utils.azure_storage import get_blob_sas_url
 
 # Configure AssemblyAI
 aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
