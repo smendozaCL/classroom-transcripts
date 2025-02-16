@@ -8,6 +8,9 @@ import assemblyai as aai
 import os
 from azure.data.tables import UpdateMode, TableClient
 
+if not st.experimental_user.is_authenticated:
+    st.login()
+
 # Initialize session state for status values if not already set
 if "transcription_statuses" not in st.session_state:
     st.session_state.transcription_statuses = [

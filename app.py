@@ -12,7 +12,6 @@ if DEBUG:
     logging.basicConfig(level=logging.DEBUG)
     st.write("Debug mode enabled")
 
-
 upload_page = st.Page(
     "src/upload.py",
     title="Upload Audio",
@@ -26,17 +25,27 @@ dashboard_page = st.Page(
     icon="🎙️",
     url_path="/dashboard",
 )
+profile_page = st.Page( 
+    "src/user_profile.py",
+    title="Profile",
+    icon="👤",
+    url_path="/profile",
+)
 
 # Build pages list based on debug setting
-pages_list = [upload_page, dashboard_page]
-if DEBUG:
-    debug_page = st.Page(
-        "src/debug_table.py",
-        title="Debug Table",
-        icon="🔍",
-        url_path="/debug",
-    )
-    pages_list.append(debug_page)
+pages_list = [upload_page]
+
+if st.experimental_user.is_logged_in:
+    pages_list.append(dashboard_page)
+    pages_list.append(profile_page)
+    if DEBUG:
+        debug_page = st.Page(
+            "src/debug_table.py",
+            title="Debug Table",
+            icon="🔍",
+            url_path="/debug",
+        )
+        pages_list.append(debug_page)
 
 pages = st.navigation(pages_list)
 pages.run()

@@ -23,10 +23,10 @@ def get_azure_credential():
         client_secret = os.getenv("AZURE_CLIENT_SECRET")
 
         if not all([tenant_id, client_id, client_secret]):
-            logging.error(
-                "Missing required Azure credentials in environment variables")
+            logging.error("Missing required Azure credentials in environment variables")
             st.error(
-                "Missing Azure credentials. Please check your environment configuration.")
+                "Missing Azure credentials. Please check your environment configuration."
+            )
             raise ValueError(
                 "Missing required Azure credentials in environment variables"
             )
@@ -40,23 +40,21 @@ def get_azure_credential():
 
         # Test the credential
         credential.get_token("https://storage.azure.com/.default")
-        logging.debug(
-            "Successfully authenticated with Azure using service principal")
+        logging.debug("Successfully authenticated with Azure using service principal")
         return credential
     except Exception as e:
         logging.error(f"Error authenticating with Azure: {e}", exc_info=True)
         # Try DefaultAzureCredential as fallback
         try:
-            logging.debug(
-                "Attempting to use DefaultAzureCredential as fallback")
+            logging.debug("Attempting to use DefaultAzureCredential as fallback")
             credential = DefaultAzureCredential()
             credential.get_token("https://storage.azure.com/.default")
-            logging.debug(
-                "Successfully authenticated using DefaultAzureCredential")
+            logging.debug("Successfully authenticated using DefaultAzureCredential")
             return credential
         except Exception as default_error:
             logging.error(
-                f"DefaultAzureCredential also failed: {default_error}", exc_info=True)
+                f"DefaultAzureCredential also failed: {default_error}", exc_info=True
+            )
             raise ValueError(f"Failed to authenticate with Azure: {str(e)}")
 
 
@@ -66,9 +64,8 @@ def get_account_key_from_connection_string(connection_string: str) -> str:
     if not connection_string:
         raise ValueError("Connection string is required")
 
-    parts = dict(part.split('=', 1)
-                 for part in connection_string.split(';') if part)
-    return parts.get('AccountKey')
+    parts = dict(part.split("=", 1) for part in connection_string.split(";") if part)
+    return parts.get("AccountKey")
 
 
 # Initialize variables for logging
@@ -87,22 +84,19 @@ try:
     # Get storage account key from connection string
     connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     if connection_string:
-        storage_account_key = get_account_key_from_connection_string(
-            connection_string)
+        storage_account_key = get_account_key_from_connection_string(connection_string)
         logging.debug(
-            "Successfully obtained storage account key from connection string")
+            "Successfully obtained storage account key from connection string"
+        )
 
     # Create BlobServiceClient
-    storage_account = os.getenv(
-        "AZURE_STORAGE_ACCOUNT", "classroomtranscripts")
+    storage_account = os.getenv("AZURE_STORAGE_ACCOUNT", "classroomtranscripts")
     if not storage_account:
-        raise ValueError(
-            "AZURE_STORAGE_ACCOUNT environment variable is not set")
+        raise ValueError("AZURE_STORAGE_ACCOUNT environment variable is not set")
 
     account_url = f"https://{storage_account}.blob.core.windows.net"
     logging.debug(f"Connecting to storage account: {account_url}")
-    blob_service_client = BlobServiceClient(
-        account_url, credential=credential)
+    blob_service_client = BlobServiceClient(account_url, credential=credential)
     logging.debug("Successfully created BlobServiceClient")
 
     # Get container clients and create if they don't exist
@@ -119,19 +113,17 @@ try:
         uploads_container_client.get_container_properties()
         logging.debug(f"Container {uploads_container} exists")
     except Exception as e:
-        logging.debug(
-            f"Creating {uploads_container} container... Error: {str(e)}")
+        logging.debug(f"Creating {uploads_container} container... Error: {str(e)}")
         uploads_container_client = blob_service_client.create_container(
             uploads_container,
-            enable_versioning=True  # Enable versioning
+            enable_versioning=True,  # Enable versioning
         )
 
     try:
         transcripts_container_client.get_container_properties()
         logging.debug(f"Container {transcripts_container} exists")
     except Exception as e:
-        logging.debug(
-            f"Creating {transcripts_container} container... Error: {str(e)}")
+        logging.debug(f"Creating {transcripts_container} container... Error: {str(e)}")
         transcripts_container_client = blob_service_client.create_container(
             transcripts_container
         )
@@ -141,8 +133,7 @@ except ValueError as ve:
     st.error(str(ve))
 except Exception as e:
     logging.error(f"Error connecting to Azure Storage: {e}", exc_info=True)
-    st.error(
-        "Could not connect to storage. Please try again later or contact support.")
+    st.error("Could not connect to storage. Please try again later or contact support.")
 
 # Log debug information after variables are defined
 logging.debug("Debug information:")
@@ -189,18 +180,12 @@ st.title("🎤 Classroom Transcripts")
 if org_name := os.getenv("ORGANIZATION_NAME"):
     st.caption(f"Internal tool for testing by {org_name}.")
 
-st.subheader("Upload a Class Recording")
-st.write(
-    "We'll generate a transcript and post it for you and your coach."
-)
-
 
 def generate_unique_blob_name(original_filename: str) -> str:
     """Generate a unique blob name using timestamp and original filename."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     # Remove any potentially problematic characters from original filename
-    clean_filename = "".join(
-        c for c in original_filename if c.isalnum() or c in "._- ")
+    clean_filename = "".join(c for c in original_filename if c.isalnum() or c in "._- ")
     return f"{timestamp}_{clean_filename}"
 
 
@@ -209,15 +194,15 @@ def upload_to_azure(file):
         if uploads_container_client is None:
             logging.error("Azure Storage not initialized")
             st.error(
-                "Storage connection not initialized. Please refresh the page and try again.")
+                "Storage connection not initialized. Please refresh the page and try again."
+            )
             return False
 
         # Generate unique blob name
         unique_blob_name = generate_unique_blob_name(file.name)
         logging.debug(f"Generated unique blob name: {unique_blob_name}")
 
-        blob_client = uploads_container_client.get_blob_client(
-            unique_blob_name)
+        blob_client = uploads_container_client.get_blob_client(unique_blob_name)
         logging.debug(f"Created blob client for {unique_blob_name}")
 
         # Upload as block blob
@@ -225,7 +210,7 @@ def upload_to_azure(file):
         try:
             blob = blob_client.upload_blob(
                 file,
-                overwrite=False  # No need for overwrite with unique names
+                overwrite=False,  # No need for overwrite with unique names
             )
             logging.debug(f"Successfully uploaded blob: {unique_blob_name}")
 
@@ -238,19 +223,19 @@ def upload_to_azure(file):
                 "etag": properties.etag,
                 "last_modified": properties.last_modified.isoformat(),
                 "size": properties.size,
-                "url": blob_client.url
+                "url": blob_client.url,
             }
 
         except Exception as upload_error:
-            logging.error(
-                f"Failed to upload blob: {str(upload_error)}", exc_info=True)
+            logging.error(f"Failed to upload blob: {str(upload_error)}", exc_info=True)
             st.error("Failed to upload file. Please try again.")
             return False
 
     except Exception as e:
         logging.error(f"Error uploading to Azure: {str(e)}", exc_info=True)
         st.error(
-            "Upload failed. Please try again or contact support if the problem persists.")
+            "Upload failed. Please try again or contact support if the problem persists."
+        )
         return False
 
 
@@ -268,41 +253,32 @@ async def submit_transcription(url: str) -> dict:
         transcriber = aai.Transcriber(config=config)
 
         transcript = transcriber.submit(data=url, config=config)
-        return {
-            "id": transcript.id,
-            "file_url": url,
-            "status": transcript.status
-        }
+        return {"id": transcript.id, "file_url": url, "status": transcript.status}
 
     except Exception as e:
         logging.error(f"Error submitting transcription: {e}")
         st.error("We couldn't transcribe that file. Is that the right file?")
         st.expander("Error details").write(f"{e}")
-        return {
-            "id": "error",
-            "file_url": url,
-            "status": "error",
-            "error": str(e)
-        }
+        return {"id": "error", "file_url": url, "status": "error", "error": str(e)}
 
 
 async def store_mapping_in_table(blob_dict: dict, transcript_dict: dict):
     """Store the mapping between uploaded file and its transcript."""
     try:
         table_client = get_table_client()
-        
+
         entity = create_upload_entity(
             blob_name=blob_dict["name"],
             original_name=blob_dict["original_name"],
-            transcript_id=transcript_dict["id"]
+            transcript_id=transcript_dict["id"],
         )
-        
+
         # Add additional metadata
         entity["etag"] = blob_dict["etag"]
         entity["lastModified"] = blob_dict["last_modified"]
         entity["blobSize"] = blob_dict["size"]
         entity["audioUrl"] = transcript_dict["file_url"]
-        
+
         table_client.create_entity(entity=entity)
         logging.info(f"Stored mapping: {blob_dict['name']} -> {transcript_dict['id']}")
 
@@ -311,80 +287,120 @@ async def store_mapping_in_table(blob_dict: dict, transcript_dict: dict):
         raise
 
 
-@st.cache_data
-async def get_transcript_mapping(blob_name: str) -> dict:
-    """Retrieve transcript mapping for a given blob name."""
-    try:
-        table_client = get_table_client()
-        try:
-            entity = table_client.get_entity("AudioFiles", blob_name)
-            return {
-                "transcriptId": entity["transcriptId"],
-                "audioUrl": entity["audioUrl"],
-                "uploadTime": entity["uploadTime"],
-            }
-        except Exception as e:
-            logging.warning(f"No mapping found for blob {blob_name}: {e}")
-            return None
+# async def get_transcript_mapping(blob_name: str) -> dict:
+#     """Retrieve transcript mapping for a given blob name."""
+#     try:
+#         table_client = get_table_client()
+#         try:
+#             entity = table_client.get_entity("AudioFiles", blob_name)
+#             return {
+#                 "transcriptId": entity["transcriptId"],
+#                 "audioUrl": entity["audioUrl"],
+#                 "uploadTime": entity["uploadTime"],
+#             }
+#         except Exception as e:
+#             logging.warning(f"No mapping found for blob {blob_name}: {e}")
+#             return None
 
-    except Exception as e:
-        logging.error(f"Error retrieving mapping from table: {e}")
-        return None
+#     except Exception as e:
+#         logging.error(f"Error retrieving mapping from table: {e}")
+#         return None
 
 
-if uploaded_file := st.file_uploader(
-    "Choose an audio file",
-    type=[
-        "3ga", "8svx", "aac", "ac3", "aif", "aiff", "alac", "amr",
-        "ape", "au", "dss", "flac", "flv", "m4a", "m4b", "m4p",
-        "m4r", "mp3", "mpga", "ogg", "oga", "mogg", "opus", "qcp",
-        "tta", "voc", "wav", "wma", "wv",
-    ],
-):
-    if upload_result := upload_to_azure(uploaded_file):
-        blob_sas_url = get_blob_sas_url(
-            blob_name=upload_result["name"],
-            container_name=uploads_container,
-            storage_account=storage_account,
-            storage_account_key=storage_account_key
-        )
+if st.experimental_user.is_logged_in:
+    with st.sidebar:    
+        cols = st.columns([1, 2], gap="small")
+        with cols[0]:
+            st.image(st.experimental_user.picture, width=50)
+        with cols[1]:
+            st.write(st.experimental_user.name, st.experimental_user.email)
+            if st.button("Logout"):
+                st.logout()
 
-        # Original URL
-        url = blob_sas_url
+    st.subheader("Upload a Class Recording", divider=True)
+    st.write("We'll generate a transcript and post it for you and your coach.")
 
-        # URL-encode special characters
-        safe_url = quote(url, safe=':/?&=%')
-
-        # Markdown link text
-        link_text = "Link Text"
-
-        # Create the Markdown link
-        markdown_link = f"[{upload_result['original_name']}]({safe_url})"
-        st.success(f"Uploaded file to Azure: {markdown_link}")
-        transcript = asyncio.run(submit_transcription(safe_url))
-        if transcript["status"] == "queued":
-            # Store mapping in table
-            asyncio.run(store_mapping_in_table(upload_result, transcript))
-
-            st.success("✅ Transcription submitted successfully!")
-            st.info(
-                "We'll process that transcript and share it with your coach. You can close this window or upload another file."
+    if uploaded_file := st.file_uploader(
+        "Choose an audio file",
+        type=[
+            "3ga",
+            "8svx",
+            "aac",
+            "ac3",
+            "aif",
+            "aiff",
+            "alac",
+            "amr",
+            "ape",
+            "au",
+            "dss",
+            "flac",
+            "flv",
+            "m4a",
+            "m4b",
+            "m4p",
+            "m4r",
+            "mp3",
+            "mpga",
+            "ogg",
+            "oga",
+            "mogg",
+            "opus",
+            "qcp",
+            "tta",
+            "voc",
+            "wav",
+            "wma",
+            "wv",
+        ],
+    ):
+        if upload_result := upload_to_azure(uploaded_file):
+            blob_sas_url = get_blob_sas_url(
+                blob_name=upload_result["name"],
+                container_name=uploads_container,
+                storage_account=storage_account,
+                storage_account_key=storage_account_key,
             )
-            logging.info(
-                f"'{upload_result['name']}' (original: '{upload_result['original_name']}') "
-                f"submitted for transcription"
-            )
+
+            # Original URL
+            url = blob_sas_url
+
+            # URL-encode special characters
+            safe_url = quote(url, safe=":/?&=%")
+
+            # Markdown link text
+            link_text = "Link Text"
+
+            # Create the Markdown link
+            markdown_link = f"[{upload_result['original_name']}]({safe_url})"
+            st.success(f"Uploaded file to Azure: {markdown_link}")
+            transcript = asyncio.run(submit_transcription(safe_url))
+            if transcript["status"] == "queued":
+                # Store mapping in table
+                asyncio.run(store_mapping_in_table(upload_result, transcript))
+
+                st.success("✅ Transcription submitted successfully!")
+                st.info(
+                    "We'll process that transcript and share it with your coach. You can close this window or upload another file."
+                )
+                logging.info(
+                    f"'{upload_result['name']}' (original: '{upload_result['original_name']}') "
+                    f"submitted for transcription"
+                )
+            else:
+                st.error("Transcription submission failed - please try again.")
+                logging.error(
+                    f"Transcription failed with status: {transcript['status']}"
+                )
         else:
-            st.error("Transcription submission failed - please try again.")
-            logging.error(
-                f"Transcription failed with status: {transcript['status']}")
-    else:
-        st.error("Upload to storage failed - please try again")
+            st.error("Upload to storage failed - please try again")
+
+else:
+    if st.button(
+        "Sign In", key="sign_in_button", use_container_width=True, type="primary"
+    ):
+        st.login()
 
 
 if feedback_email := os.getenv("FEEDBACK_EMAIL"):
     st.caption(f"📧 Help and feedback: {feedback_email}")
-
-with st.sidebar:
-    if os.getenv("DEBUG"):
-        st.write(st.experimental_user)
