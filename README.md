@@ -180,6 +180,7 @@ classroom-transcripts/
 | `AZURE_STORAGE_ACCOUNT` | Azure Storage account name | Yes      | -              |
 | `AZURE_FUNCTION_KEY`    | Function app key           | Yes      | -              |
 | `WEBSITE_HOSTNAME`      | Function app hostname      | No       | localhost:7071 |
+| `MGMT_API_ACCESS_TOKEN` | Management API access token| Yes      | -              |
 
 See `.env.example` for a complete list of configuration options.
 
@@ -265,6 +266,9 @@ This is a web app that supports teachers and curriculum coaches in analyzing cla
    # Client Configuration
    ORGANIZATION_NAME="your_organization_name"
    FEEDBACK_EMAIL="your_feedback_email"
+
+   # Management API Access Token
+   MGMT_API_ACCESS_TOKEN="your_management_api_access_token"
    ```
 
 3. **Use GitHub Actions for Deployment**:

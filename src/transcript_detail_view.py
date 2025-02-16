@@ -16,6 +16,8 @@ from src.upload import get_account_key_from_connection_string
 # Configure AssemblyAI
 aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
 
+# Retrieve access token from environment variable
+ACCESS_TOKEN = os.getenv("MGMT_API_ACCESS_TOKEN")
 
 def back_to_list():
     """Navigate back to the transcript list view."""
