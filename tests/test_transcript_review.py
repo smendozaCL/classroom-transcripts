@@ -20,10 +20,10 @@ class TestTranscriptReview(unittest.TestCase):
             st.write(
                 f"**Transcription ID:** {mock_state['transcription_id']}")
         
-        from src import dashboard
-        with patch.object(dashboard.st, "session_state", mock_state):
-            dashboard.st.write(f"**File URI:** {mock_state['file_uri']}")
-            dashboard.st.write(
+        from . import transcript_detail_view
+        with patch.object(transcript_detail_view.st, "session_state", mock_state):
+            transcript_detail_view.st.write(f"**File URI:** {mock_state['file_uri']}")
+            transcript_detail_view.st.write(
                 f"**Transcription ID:** {mock_state['transcription_id']}"
             )
 
@@ -40,14 +40,14 @@ class TestTranscriptReview(unittest.TestCase):
         mock_button.return_value = True
         mock_post.return_value.status_code = 200
         mock_post.return_value.json.return_value = {"status": "success"}
-        from src import dashboard
+        from . import transcript_detail_view
 
-        dashboard.st.session_state = {"selected_id": "test_id"}
-        dashboard.st.button("Resubmit Transcription")
+        transcript_detail_view.st.session_state = {"selected_id": "test_id"}
+        transcript_detail_view.st.button("Resubmit Transcription")
         mock_success.assert_called_with("Transcription resubmitted successfully!")
 
         mock_post.return_value.status_code = 400
-        dashboard.st.button("Resubmit Transcription")
+        transcript_detail_view.st.button("Resubmit Transcription")
         mock_error.assert_called_with(
             "Failed to resubmit transcription: {'status': 'error'}"
         )
@@ -55,13 +55,13 @@ class TestTranscriptReview(unittest.TestCase):
     @patch("streamlit.warning")
     @patch("streamlit.session_state", {"file_uri": None, "transcription_id": None})
     def test_handle_fresh_session_state(self, mock_warning):
-        from src import dashboard
+        from . import transcript_detail_view
 
-        dashboard.st.session_state = {
+        transcript_detail_view.st.session_state = {
             "file_uri": None,
             "transcription_id": None,
         }
-        dashboard.st.warning(
+        transcript_detail_view.st.warning(
             "No file URI or transcription ID found in session state. Please upload a new file."
         )
         mock_warning.assert_called_with(
@@ -71,10 +71,10 @@ class TestTranscriptReview(unittest.TestCase):
     @patch("streamlit.warning")
     @patch("streamlit.session_state", {"file_uri": None})
     def test_no_file_uri_in_session_state(self, mock_warning):
-        from src import dashboard
+        from . import transcript_detail_view
 
-        dashboard.st.session_state = {"file_uri": None}
-        dashboard.st.warning(
+        transcript_detail_view.st.session_state = {"file_uri": None}
+        transcript_detail_view.st.warning(
             "No file URI found in session state. Please upload a new file."
         )
         mock_warning.assert_called_with(
@@ -84,13 +84,13 @@ class TestTranscriptReview(unittest.TestCase):
     @patch("streamlit.warning")
     @patch("streamlit.session_state", {"file_uri": None, "transcription_id": None})
     def test_find_blob_when_file_uri_not_set(self, mock_warning):
-        from src import dashboard
+        from . import transcript_detail_view
 
-        dashboard.st.session_state = {
+        transcript_detail_view.st.session_state = {
             "file_uri": None,
             "transcription_id": None,
         }
-        dashboard.st.warning(
+        transcript_detail_view.st.warning(
             "No file URI or transcription ID found in session state. Please upload a new file."
         )
         mock_warning.assert_called_with(
@@ -101,7 +101,7 @@ class TestTranscriptReview(unittest.TestCase):
     def test_missing_api_key(self, mock_error):
         """Test handling of missing API key"""
         with patch.dict(os.environ, {"ASSEMBLYAI_API_KEY": ""}):
-            from src import dashboard
+            from . import transcript_detail_view
 
             mock_error.assert_called_with(
                 "AssemblyAI API key not found. Please check your environment configuration."
@@ -111,7 +111,7 @@ class TestTranscriptReview(unittest.TestCase):
     def test_session_state_initialization(self, mock_session_state):
         """Test proper initialization of session state variables"""
         mock_session_state = {}
-        from src import dashboard
+        from . import transcript_detail_view
 
         expected_keys = [
             "page_token",
