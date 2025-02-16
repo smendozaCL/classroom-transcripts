@@ -64,18 +64,6 @@ if "transcription_settings_form" not in st.session_state:
 # Initialize debug mode from secrets
 # DEBUG = st.secrets.get("DEBUG", False)  # Default to False if not set
 DEBUG = os.getenv("DEBUG", False)
-if st.experimental_user.is_logged_in:
-    with st.sidebar:
-        cols = st.columns([1, 3])
-        with cols[0]:
-            st.image(st.experimental_user.picture)
-        with cols[1]:
-            st.write(st.experimental_user.name)
-            st.write(st.experimental_user.email)
-        if st.button("Logout"):
-            st.logout()
-else:
-    st.login()
 
 # Main content area with sidebar
 st.title("📚 Transcript Review Dashboard")

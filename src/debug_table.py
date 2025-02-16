@@ -8,7 +8,7 @@ import assemblyai as aai
 import os
 from azure.data.tables import UpdateMode, TableClient
 
-if not st.experimental_user.is_authenticated:
+if not st.experimental_user.is_logged_in:
     st.login()
 
 # Initialize session state for status values if not already set

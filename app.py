@@ -38,6 +38,16 @@ pages_list = [upload_page]
 if st.experimental_user.is_logged_in:
     pages_list.append(dashboard_page)
     pages_list.append(profile_page)
+    with st.sidebar:
+        cols = st.columns([1, 3])
+        with cols[0]:
+            st.image(st.experimental_user.picture)
+        with cols[1]:
+            st.write(st.experimental_user.name)
+            st.write(st.experimental_user.email)
+            if st.button("Logout"):
+                st.logout()
+
     if DEBUG:
         debug_page = st.Page(
             "src/debug_table.py",

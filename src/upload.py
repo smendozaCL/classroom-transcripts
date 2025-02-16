@@ -308,15 +308,6 @@ async def store_mapping_in_table(blob_dict: dict, transcript_dict: dict):
 
 
 if st.experimental_user.is_logged_in:
-    with st.sidebar:    
-        cols = st.columns([1, 2], gap="small")
-        with cols[0]:
-            st.image(st.experimental_user.picture, width=50)
-        with cols[1]:
-            st.write(st.experimental_user.name, st.experimental_user.email)
-            if st.button("Logout"):
-                st.logout()
-
     st.subheader("Upload a Class Recording", divider=True)
     st.write("We'll generate a transcript and post it for you and your coach.")
 
