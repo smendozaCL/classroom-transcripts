@@ -1,12 +1,14 @@
 {
-  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.typeCheckingMode": "off",
   "azureFunctions.deploySubpath": ".",
   "azureFunctions.scmDoBuildDuringDeployment": true,
   "azureFunctions.pythonVenv": ".venv",
   "azureFunctions.projectLanguage": "Python",
   "azureFunctions.projectRuntime": "~4",
   "debug.internalConsoleOptions": "neverOpen",
-  "python.testing.pytestArgs": ["tests"],
+  "python.testing.pytestArgs": [
+    "tests"
+  ],
   "python.testing.unittestEnabled": false,
   "python.testing.pytestEnabled": true,
   "containerApps.deploymentConfigurations": [
@@ -19,6 +21,17 @@
       "resourceGroup": "container-apps-west",
       "containerApp": "classroom-transcripts",
       "containerRegistry": "containerappswest7e0940"
+    },
+    {
+      "label": "classroom-transcripts-dev",
+      "type": "AcrDockerBuildRequest",
+      "dockerfilePath": "Dockerfile",
+      "srcPath": ".",
+      "envPath": ".env",
+      "resourceGroup": "eddo-container-apps",
+      "containerApp": "classroom-transcripts-dev",
+      "containerRegistry": "containerappswest7e0940"
     }
-  ]
+  ],
+  "python.analysis.autoImportCompletions": true
 }

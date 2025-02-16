@@ -14,6 +14,13 @@ dependencies = [
     "google-api-python-client>=2.160.0",
     "authlib>=1.4.1",
     "plotly>=6.0.0",
+    "scipy>=1.15.1",
+    "numpy>=2.2.2",
+    "azure-data-tables>=12.6.0",
+    "pandas",
+    "pytz",
+    "requests",
+    "wordcloud>=1.9.4",
 ]
 
 [build-system]
