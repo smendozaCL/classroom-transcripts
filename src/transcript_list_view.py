@@ -168,8 +168,12 @@ def load_table_data(_table_client):
     for i, item in enumerate(items):
         item_dict = dict(item)
 
-        # Skip items that don't belong to current user
-        if item_dict.get("uploaderEmail") != user.email:
+        # Only filter by uploaderEmail if the user is NOT a coach.
+        # If the user does not have the role 'coach', then only include items that belong to their email.
+        if (
+            getattr(user, "role", None) != "coach"
+            and item_dict.get("uploaderEmail") != user.email
+        ):
             continue
 
         # Add formatted size
@@ -459,4 +463,13 @@ def list_all_mappings():
     )
 
     entities = table_client.list_entities()
-    return [entity for entity in entities]
+    entities_list = list(entities)
+    user = st.experimental_user
+    # Only filter by uploaderEmail if the user is NOT a coach.
+    if getattr(user, "role", None) != "coach":
+        entities_list = [
+            entity
+            for entity in entities_list
+            if entity.get("uploaderEmail") == user.email
+        ]
+    return entities_list
