@@ -205,6 +205,8 @@ This is a web app that supports teachers and curriculum coaches in analyzing cla
 
 - Teachers can upload audio files and analyze them with a focus on the teacher's voice, the student's voice, and the overall classroom discussion.
 - Uploaded audio files are transcribed and published to a Google Drive folder.
+- Coaches and admins can see all transcripts.
+- List and detail views show the name and email of the uploading user.
 
 ## Automate Azure Resource Creation
 

@@ -52,6 +52,7 @@ if st.experimental_user.is_logged_in:
         with cols[1]:
             st.write(st.experimental_user.name)
             st.write(st.experimental_user.email)
+            st.write(f"Role: {st.experimental_user.role}")  # Display user role
             if st.button("Logout"):
                 st.logout()
 

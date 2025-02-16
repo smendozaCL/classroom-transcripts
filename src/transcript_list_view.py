@@ -279,6 +279,8 @@ def display_transcript_item(item):
         | Uploaded | {upload_time_str} |
         | Status | {status_color} {status.title()} |
         | Transcript ID | `{item.get("transcriptId", "N/A")}` |
+        | Uploader Name | {item.get("uploaderName", "N/A")} |
+        | Uploader Email | {item.get("uploaderEmail", "N/A")} |
         """)
 
         # Actions row
@@ -338,7 +340,7 @@ def display_status_overview(items_list):
     """Display status overview in a fragment"""
     user = st.experimental_user
     # For non-coach users, ensure we only count items that belong to them.
-    if (getattr(user, "role", "")).lower() != "coach":
+    if (getattr(user, "role", "")).lower() not in ["coach", "admin"]:
         items_list = [
             i
             for i in items_list
@@ -471,7 +473,7 @@ def list_all_mappings():
     entities_list = list(entities)
     user = st.experimental_user
     # Only filter by uploaderEmail if the user is NOT a coach.
-    if (getattr(user, "role", "")).lower() != "coach":
+    if (getattr(user, "role", "")).lower() not in ["coach", "admin"]:
         entities_list = [
             entity
             for entity in entities_list
