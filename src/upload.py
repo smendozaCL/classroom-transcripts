@@ -267,6 +267,9 @@ async def store_mapping_in_table(blob_dict: dict, transcript_dict: dict):
     try:
         table_client = get_table_client()
 
+        # Get user information
+        user = st.experimental_user
+
         entity = create_upload_entity(
             blob_name=blob_dict["name"],
             original_name=blob_dict["original_name"],
@@ -278,6 +281,12 @@ async def store_mapping_in_table(blob_dict: dict, transcript_dict: dict):
         entity["lastModified"] = blob_dict["last_modified"]
         entity["blobSize"] = blob_dict["size"]
         entity["audioUrl"] = transcript_dict["file_url"]
+
+        # Add user information
+        entity["uploaderEmail"] = user.email
+        entity["uploaderName"] = user.name
+        entity["uploaderEmailVerified"] = getattr(user, "email_verified", False)
+        entity["uploaderExternalId"] = getattr(user, "external_id", None)  # sid
 
         table_client.create_entity(entity=entity)
         logging.info(f"Stored mapping: {blob_dict['name']} -> {transcript_dict['id']}")
@@ -374,6 +383,11 @@ if st.experimental_user.is_logged_in:
                 st.info(
                     "We'll process that transcript and share it with your coach. You can close this window or upload another file."
                 )
+
+                # Clear cache and rerun to show new upload immediately
+                st.cache_data.clear()
+                st.rerun()
+
                 logging.info(
                     f"'{upload_result['name']}' (original: '{upload_result['original_name']}') "
                     f"submitted for transcription"
