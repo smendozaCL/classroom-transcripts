@@ -10,15 +10,10 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies using pip and uv in the virtual environment
-RUN pip install uv
-RUN uv pip install -r requirements.txt --system
+COPY . .
 
-# Copy application code
-COPY . /app
-
-# Ensure the entrypoint script is executable
-RUN chmod +x /app/entrypoint.sh
+# Install dependencies
+RUN uv pip install -r pyproject.toml --system
 
 # Creates a non-root user with an explicit UID and adds permission to access the workspace
 # For more info, please refer to https://aka.ms/vscode-docker-python-configure-containers
@@ -26,5 +21,4 @@ RUN adduser -u 5678 --disabled-password --gecos "" appuser && chown -R appuser /
 USER appuser
 
 # During debugging, this entry point will be overridden. For more information, please refer to https://aka.ms/vscode-docker-python-debug
-
-CMD ["uv", "run", "streamlit", "run", "app.py", "--server.port=8501"]
+CMD ["streamlit", "run", "src/app.py", "--server.port=8501"]
