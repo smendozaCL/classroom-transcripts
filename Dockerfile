@@ -1,8 +1,11 @@
 # For more information, please refer to https://aka.ms/vscode-docker-python
-FROM ghcr.io/astral-sh/uv:0.5.31-python3.13-bookworm-slim
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
 # Set working directory to where the src module will be
-WORKDIR /workspace
+WORKDIR /app
+
+# Copy from the cache instead of linking since it's a mounted volume
+ENV UV_LINK_MODE=copy
 
 
 # Install system dependencies
@@ -10,15 +13,16 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-COPY . .
+COPY . /app
 
-# Install dependencies
-RUN uv pip install -r pyproject.toml --system
+# Install the project's dependencies using the lockfile and settings
+RUN uv sync --frozen --no-install-project --no-dev
 
-# Creates a non-root user with an explicit UID and adds permission to access the workspace
-# For more info, please refer to https://aka.ms/vscode-docker-python-configure-containers
-RUN adduser -u 5678 --disabled-password --gecos "" appuser && chown -R appuser /workspace
-USER appuser
+# Place executables in the environment at the front of the path
+ENV PATH="/app/.venv/bin:$PATH"
 
-# During debugging, this entry point will be overridden. For more information, please refer to https://aka.ms/vscode-docker-python-debug
-CMD ["uv" "run" "streamlit", "run", "app.py"]
+# Reset the entrypoint, don't invoke `uv`
+ENTRYPOINT []
+
+# Run the streamlit app
+CMD ["streamlit", "run", "app.py"]
