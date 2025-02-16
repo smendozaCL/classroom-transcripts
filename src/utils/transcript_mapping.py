@@ -1,42 +1,103 @@
-from typing import Optional, Dict
-import json
-import os
+from datetime import datetime
+from azure.data.tables import TableEntity, TableClient
+import logging
+import warnings
 
 class TranscriptMapper:
-    def __init__(self, mapping_file: str = "data/transcript_mapping.json"):
-        self.mapping_file = mapping_file
-        self._ensure_mapping_file()
-        self.mapping = self._load_mapping()
+    """
+    DEPRECATED: This class is deprecated in favor of using the standalone functions create_upload_entity() and update_transcript_status().
+    Will be removed in a future version.
+    """
+    
+    def __init__(self, table_client: TableClient):
+        warnings.warn(
+            "TranscriptMapper class is deprecated. Use create_upload_entity() and update_transcript_status() functions instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        self.table_client = table_client
+    
+    def create_upload_entity(self, blob_name: str, original_name: str, transcript_id: str) -> TableEntity:
+        """
+        Create a standardized entity for storing audio file and transcript mappings.
+        
+        Args:
+            blob_name: Unique name of blob in storage
+            original_name: Original filename before uniquification
+            transcript_id: AssemblyAI transcript ID
+        """
+        timestamp = datetime.utcnow().isoformat()
+        
+        return TableEntity(
+            PartitionKey="AudioFiles",
+            RowKey=blob_name,
+            uploadTime=timestamp,
+            originalFileName=original_name,
+            transcriptId=transcript_id,
+            status="queued"
+        )
+    
+    def update_transcript_status(self, blob_name: str, status: str):
+        """Update the transcription status for a given blob."""
+        try:
+            entity = {
+                'PartitionKey': 'AudioFiles',
+                'RowKey': blob_name,
+                'status': status,
+                'lastUpdated': datetime.utcnow().isoformat()
+            }
+            self.table_client.update_entity(mode='merge', entity=entity)
+            logging.info(f"Updated status for {blob_name} to {status}")
+        except Exception as e:
+            logging.error(f"Failed to update status for {blob_name}: {e}")
+            raise
+    
+    def get_transcript_mapping(self, blob_name: str) -> dict:
+        """Retrieve transcript mapping for a given blob name."""
+        try:
+            entity = self.table_client.get_entity("AudioFiles", blob_name)
+            return {
+                "transcriptId": entity["transcriptId"],
+                "audioUrl": entity["audioUrl"],
+                "uploadTime": entity["uploadTime"],
+                "status": entity.get("status", "unknown")
+            }
+        except Exception as e:
+            logging.warning(f"No mapping found for blob {blob_name}: {e}")
+            return None
 
-    def _ensure_mapping_file(self) -> None:
-        """Ensure the mapping file and directory exist."""
-        os.makedirs(os.path.dirname(self.mapping_file), exist_ok=True)
-        if not os.path.exists(self.mapping_file):
-            with open(self.mapping_file, 'w') as f:
-                json.dump({}, f)
+# For backward compatibility, keep the original functions
+def create_upload_entity(blob_name: str, original_name: str, transcript_id: str) -> TableEntity:
+    """
+    Create a standardized entity for storing audio file and transcript mappings.
+    
+    Args:
+        blob_name: Unique name of blob in storage
+        original_name: Original filename before uniquification
+        transcript_id: AssemblyAI transcript ID
+    """
+    timestamp = datetime.utcnow().isoformat()
+    
+    return TableEntity(
+        PartitionKey="AudioFiles",
+        RowKey=blob_name,
+        uploadTime=timestamp,
+        originalFileName=original_name,
+        transcriptId=transcript_id,
+        status="queued"
+    )
 
-    def _load_mapping(self) -> Dict:
-        """Load the mapping from file."""
-        with open(self.mapping_file, 'r') as f:
-            return json.load(f)
-
-    def _save_mapping(self) -> None:
-        """Save the current mapping to file."""
-        with open(self.mapping_file, 'w') as f:
-            json.dump(self.mapping, f, indent=2)
-
-    def add_mapping(self, transcript_id: str, file_uri: str) -> None:
-        """Add or update a transcript-file mapping."""
-        self.mapping[transcript_id] = file_uri
-        self._save_mapping()
-
-    def get_file_uri(self, transcript_id: str) -> Optional[str]:
-        """Get the file URI for a transcript ID."""
-        return self.mapping.get(transcript_id)
-
-    def get_transcript_id(self, file_uri: str) -> Optional[str]:
-        """Get the transcript ID for a file URI."""
-        for tid, uri in self.mapping.items():
-            if uri == file_uri:
-                return tid
-        return None 
+def update_transcript_status(table_client, blob_name: str, status: str):
+    """Update the transcription status for a given blob."""
+    try:
+        entity = {
+            'PartitionKey': 'AudioFiles',
+            'RowKey': blob_name,
+            'status': status,
+            'lastUpdated': datetime.utcnow().isoformat()
+        }
+        table_client.update_entity(mode='merge', entity=entity)
+        logging.info(f"Updated status for {blob_name} to {status}")
+    except Exception as e:
+        logging.error(f"Failed to update status for {blob_name}: {e}")
+        raise 
