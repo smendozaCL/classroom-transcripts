@@ -236,7 +236,13 @@ def get_pending_transcript_statuses(transcript_ids):
 def should_auto_refresh(items_list):
     """Determine if we should auto-refresh based on pending items"""
     pending_statuses = {"queued", "processing"}
-    return any(item.get("status") in pending_statuses for item in items_list)
+    # Only return True if there are actual pending items
+    has_pending = any(item.get("status") in pending_statuses for item in items_list)
+    # Add a timestamp check to prevent rapid refreshes
+    time_since_refresh = (
+        datetime.now(pytz.UTC) - st.session_state.last_refresh
+    ).total_seconds()
+    return has_pending and time_since_refresh >= 30
 
 
 def navigate_to_detail(transcript_id):
@@ -358,33 +364,18 @@ def display_table_data():
         st.info("No files found in the system")
         return
 
-    # Check for pending transcripts and update their status
-    pending_transcripts = [
-        item["transcriptId"]
-        for item in items_list
-        if item.get("status") in ["queued", "processing"]
-    ]
-
-    if pending_transcripts:
-        with st.spinner("Updating pending transcripts..."):
-            pending_statuses = get_pending_transcript_statuses(pending_transcripts)
-            # Update items with new statuses
-            for item in items_list:
-                if item.get("transcriptId") in pending_statuses:
-                    item["status"] = pending_statuses[item["transcriptId"]]
-
     # Sort by timestamp
     items_list.sort(key=lambda x: x.get("_timestamp", datetime.min), reverse=True)
 
-    # Auto-refresh controls in sidebar
-    with st.sidebar:
-        st.divider()
-        st.subheader("⚙️ Refresh Settings")
-        st.session_state.auto_refresh = st.toggle(
-            "Auto-refresh pending transcripts",
-            value=st.session_state.auto_refresh,
-            help="Automatically refresh the page when there are pending transcripts",
-        )
+    # Auto-refresh logic
+    if st.session_state.auto_refresh and should_auto_refresh(items_list):
+        time_since_refresh = (
+            datetime.now(pytz.UTC) - st.session_state.last_refresh
+        ).total_seconds()
+        if time_since_refresh >= 30:
+            st.session_state.last_refresh = datetime.now(pytz.UTC)
+            st.cache_data.clear()
+            st.rerun()
 
     # Display status overview in a fragment
     with st.container():
@@ -442,17 +433,6 @@ def display_table_data():
 
     # Show total count
     st.caption(f"Showing {min(end_idx, total_items)} of {total_items} transcripts")
-
-    # Auto-refresh logic in a separate fragment
-    if st.session_state.auto_refresh and should_auto_refresh(items_list):
-        with st.sidebar:
-            st.caption("🔄 Auto-refreshing every 30 seconds")
-            time_since_refresh = (
-                datetime.now(pytz.UTC) - st.session_state.last_refresh
-            ).total_seconds()
-            if time_since_refresh >= 30:
-                st.session_state.last_refresh = datetime.now(pytz.UTC)
-                st.rerun()
 
     # Add refresh controls in a fragment
     with st.container():
