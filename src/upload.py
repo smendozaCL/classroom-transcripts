@@ -262,7 +262,7 @@ async def submit_transcription(url: str) -> dict:
         return {"id": "error", "file_url": url, "status": "error", "error": str(e)}
 
 
-async def store_mapping_in_table(blob_dict: dict, transcript_dict: dict):
+async def store_mapping_in_table(blob_dict: dict, transcript_dict: dict, class_name: str, description: str):
     """Store the mapping between uploaded file and its transcript."""
     try:
         table_client = get_table_client()
@@ -288,32 +288,16 @@ async def store_mapping_in_table(blob_dict: dict, transcript_dict: dict):
         entity["uploaderEmailVerified"] = getattr(user, "email_verified", False)
         entity["uploaderExternalId"] = getattr(user, "external_id", None)  # sid
 
+        # Add class name and description
+        entity["className"] = class_name
+        entity["description"] = description
+
         table_client.create_entity(entity=entity)
         logging.info(f"Stored mapping: {blob_dict['name']} -> {transcript_dict['id']}")
 
     except Exception as e:
         logging.error(f"Error storing mapping: {e}")
         raise
-
-
-# async def get_transcript_mapping(blob_name: str) -> dict:
-#     """Retrieve transcript mapping for a given blob name."""
-#     try:
-#         table_client = get_table_client()
-#         try:
-#             entity = table_client.get_entity("AudioFiles", blob_name)
-#             return {
-#                 "transcriptId": entity["transcriptId"],
-#                 "audioUrl": entity["audioUrl"],
-#                 "uploadTime": entity["uploadTime"],
-#             }
-#         except Exception as e:
-#             logging.warning(f"No mapping found for blob {blob_name}: {e}")
-#             return None
-
-#     except Exception as e:
-#         logging.error(f"Error retrieving mapping from table: {e}")
-#         return None
 
 
 def handle_successful_upload(upload_result, transcript):
@@ -346,6 +330,9 @@ def handle_successful_upload(upload_result, transcript):
 if st.experimental_user.is_logged_in:
     st.subheader("Upload a Class Recording", divider=True)
     st.write("We'll generate a transcript and post it for you and your coach.")
+
+    class_name = st.text_input("Class Name", value="")
+    description = st.text_area("Description", value="")
 
     if uploaded_file := st.file_uploader(
         "Choose an audio file",
@@ -381,33 +368,34 @@ if st.experimental_user.is_logged_in:
             "wv",
         ],
     ):
-        if upload_result := upload_to_azure(uploaded_file):
-            blob_sas_url = get_blob_sas_url(
-                blob_name=upload_result["name"],
-                container_name=uploads_container,
-                storage_account=storage_account,
-                storage_account_key=storage_account_key,
-            )
-
-            safe_url = quote(blob_sas_url, safe=":/?&=%")
-            markdown_link = f"[{upload_result['original_name']}]({safe_url})"
-            st.success(f"Uploaded file to Azure: {markdown_link}")
-
-            transcript = asyncio.run(submit_transcription(safe_url))
-            if transcript["status"] == "queued":
-                # Store mapping in table
-                asyncio.run(store_mapping_in_table(upload_result, transcript))
-
-                # Use the new handler function instead of directly clearing cache
-                handle_successful_upload(upload_result, transcript)
-
-            else:
-                st.error("Transcription submission failed - please try again.")
-                logging.error(
-                    f"Transcription failed with status: {transcript['status']}"
+        if st.button("Submit"):
+            if upload_result := upload_to_azure(uploaded_file):
+                blob_sas_url = get_blob_sas_url(
+                    blob_name=upload_result["name"],
+                    container_name=uploads_container,
+                    storage_account=storage_account,
+                    storage_account_key=storage_account_key,
                 )
-        else:
-            st.error("Upload to storage failed - please try again")
+
+                safe_url = quote(blob_sas_url, safe=":/?&=%")
+                markdown_link = f"[{upload_result['original_name']}]({safe_url})"
+                st.success(f"Uploaded file to Azure: {markdown_link}")
+
+                transcript = asyncio.run(submit_transcription(safe_url))
+                if transcript["status"] == "queued":
+                    # Store mapping in table
+                    asyncio.run(store_mapping_in_table(upload_result, transcript, class_name, description))
+
+                    # Use the new handler function instead of directly clearing cache
+                    handle_successful_upload(upload_result, transcript)
+
+                else:
+                    st.error("Transcription submission failed - please try again.")
+                    logging.error(
+                        f"Transcription failed with status: {transcript['status']}"
+                    )
+            else:
+                st.error("Upload to storage failed - please try again")
 
 else:
     if st.button(

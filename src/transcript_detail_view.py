@@ -12,6 +12,7 @@ from typing import Optional
 import altair as alt
 from src.utils.azure_storage import get_blob_sas_url
 from src.upload import get_account_key_from_connection_string
+from src.utils.table_client import get_table_client
 
 # Configure AssemblyAI
 aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
@@ -554,6 +555,30 @@ def show():
                             st.write(
                                 f"Duration: {format_duration(transcript.audio_duration) if transcript.audio_duration else 'N/A'}"
                             )
+
+                # Add edit button for class name
+                if st.button("✏️ Edit Class Name", type="secondary"):
+                    st.session_state.editing_class_name = True
+
+                # Display form to edit class name if edit button is clicked
+                if st.session_state.get("editing_class_name"):
+                    with st.form(key="edit_class_name_form"):
+                        new_class_name = st.text_input("Class Name", value=transcript_details.get("className", ""))
+                        new_description = st.text_area("Description", value=transcript_details.get("description", ""))
+                        submit_button = st.form_submit_button(label="Save")
+
+                        if submit_button:
+                            # Update the TranscriptMappings table with the new class name and description
+                            try:
+                                table_client = get_table_client()
+                                entity = table_client.get_entity("AudioFiles", selected_id)
+                                entity["className"] = new_class_name
+                                entity["description"] = new_description
+                                table_client.update_entity(entity)
+                                st.success("Class name and description updated successfully!")
+                                st.session_state.editing_class_name = False
+                            except Exception as e:
+                                st.error(f"Error updating class name and description: {str(e)}")
 
             else:
                 st.warning(
