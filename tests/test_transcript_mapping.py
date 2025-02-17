@@ -163,6 +163,8 @@ async def test_transcript_mapping_flow(
         "blobLeaseState": blob_client.get_blob_properties().lease.state,
         "blobLeaseStatus": blob_client.get_blob_properties().lease.status,
         "uploadTime": datetime.utcnow().isoformat(),
+        "className": "Test Class",
+        "description": "Test Description",
     }
     table_client.create_entity(entity=entity)
 
@@ -188,6 +190,8 @@ async def test_transcript_mapping_flow(
         retrieved_entity["blobLeaseStatus"]
         == blob_client.get_blob_properties().lease.status
     )
+    assert retrieved_entity["className"] == "Test Class"
+    assert retrieved_entity["description"] == "Test Description"
 
 
 @pytest.mark.asyncio
@@ -214,6 +218,8 @@ async def test_transcript_mapping_retrieval(
     assert "blobETag" in entity
     assert "blobLeaseState" in entity
     assert "blobLeaseStatus" in entity
+    assert "className" in entity
+    assert "description" in entity
 
     # Verify the transcript exists in AssemblyAI
     aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
@@ -259,6 +265,8 @@ async def test_duplicate_file_uploads(
         "blobLeaseState": blob_client1.get_blob_properties().lease.state,
         "blobLeaseStatus": blob_client1.get_blob_properties().lease.status,
         "uploadTime": datetime.utcnow().isoformat(),
+        "className": "Test Class 1",
+        "description": "Test Description 1",
     }
     table_client.create_entity(entity=entity1)
 
@@ -288,6 +296,8 @@ async def test_duplicate_file_uploads(
         "blobLeaseState": blob_client2.get_blob_properties().lease.state,
         "blobLeaseStatus": blob_client2.get_blob_properties().lease.status,
         "uploadTime": datetime.utcnow().isoformat(),
+        "className": "Test Class 2",
+        "description": "Test Description 2",
     }
     table_client.create_entity(entity=entity2)
 
@@ -318,6 +328,8 @@ async def test_duplicate_file_uploads(
     assert (
         mapping1["blobLeaseStatus"] == blob_client1.get_blob_properties().lease.status
     )
+    assert mapping1["className"] == "Test Class 1"
+    assert mapping1["description"] == "Test Description 1"
 
     assert mapping2["blobSize"] == blob_client2.get_blob_properties().size
     assert (
@@ -333,6 +345,8 @@ async def test_duplicate_file_uploads(
     assert (
         mapping2["blobLeaseStatus"] == blob_client2.get_blob_properties().lease.status
     )
+    assert mapping2["className"] == "Test Class 2"
+    assert mapping2["description"] == "Test Description 2"
 
     # Verify both transcripts are accessible in AssemblyAI
     transcript1_check = aai.Transcript.get_by_id(mapping1["transcriptId"])
@@ -406,6 +420,8 @@ async def test_concurrent_uploads(
             "blobLeaseState": blob_client.get_blob_properties().lease.state,
             "blobLeaseStatus": blob_client.get_blob_properties().lease.status,
             "uploadTime": datetime.utcnow().isoformat(),
+            "className": f"Test Class {index}",
+            "description": f"Test Description {index}",
         }
         table_client.create_entity(entity=entity)
         return file_name, transcript.id
@@ -481,6 +497,8 @@ async def test_large_file_handling(
         "blobLeaseState": blob_client.get_blob_properties().lease.state,
         "blobLeaseStatus": blob_client.get_blob_properties().lease.status,
         "uploadTime": datetime.utcnow().isoformat(),
+        "className": "Test Class",
+        "description": "Test Description",
     }
     table_client.create_entity(entity=entity)
 
@@ -506,6 +524,8 @@ async def test_large_file_handling(
         retrieved_entity["blobLeaseStatus"]
         == blob_client.get_blob_properties().lease.status
     )
+    assert retrieved_entity["className"] == "Test Class"
+    assert retrieved_entity["description"] == "Test Description"
 
 
 @pytest.mark.asyncio
@@ -537,6 +557,8 @@ async def test_status_updates(
         "blobLeaseStatus": blob_client.get_blob_properties().lease.status,
         "uploadTime": datetime.utcnow().isoformat(),
         "status": "pending",  # Initial status
+        "className": "Test Class",
+        "description": "Test Description",
     }
     table_client.create_entity(entity=initial_entity)
 
@@ -575,3 +597,63 @@ async def test_status_updates(
     final_entity = table_client.get_entity("AudioFiles", blob_name)
     assert final_entity["status"] == "completed"
     assert final_entity["transcriptId"] == transcript.id
+    assert final_entity["className"] == "Test Class"
+    assert final_entity["description"] == "Test Description"
+
+
+@pytest.mark.asyncio
+async def test_edit_class_name_and_description(
+    blob_service_client, table_service_client, test_audio_file
+):
+    """Test editing class name and description."""
+    # Setup
+    container_name = "test-uploads"
+    table_name = "TestTranscriptMappings"
+    blob_name = os.path.basename(test_audio_file)
+
+    # Upload file to blob storage
+    container_client = blob_service_client.get_container_client(container_name)
+    with open(test_audio_file, "rb") as data:
+        blob_client = container_client.upload_blob(name=blob_name, data=data)
+
+    # Submit for transcription
+    aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
+    transcriber = aai.Transcriber()
+
+    with open(test_audio_file, "rb") as audio_file:
+        transcript = transcriber.transcribe(audio_file)
+
+    assert transcript.status == aai.TranscriptStatus.completed, "Transcription failed"
+
+    # Store initial mapping
+    table_client = table_service_client.get_table_client(table_name)
+    entity = {
+        "PartitionKey": "AudioFiles",
+        "RowKey": blob_name,
+        "transcriptId": transcript.id,
+        "audioUrl": blob_client.url,
+        "blobSize": blob_client.get_blob_properties().size,
+        "blobContentType": blob_client.get_blob_properties().content_settings.content_type,
+        "blobLastModified": blob_client.get_blob_properties().last_modified.isoformat(),
+        "blobETag": blob_client.get_blob_properties().etag,
+        "blobLeaseState": blob_client.get_blob_properties().lease.state,
+        "blobLeaseStatus": blob_client.get_blob_properties().lease.status,
+        "uploadTime": datetime.utcnow().isoformat(),
+        "className": "Initial Class",
+        "description": "Initial Description",
+    }
+    table_client.create_entity(entity=entity)
+
+    # Edit class name and description
+    updated_entity = {
+        "PartitionKey": "AudioFiles",
+        "RowKey": blob_name,
+        "className": "Updated Class",
+        "description": "Updated Description",
+    }
+    table_client.update_entity(mode="merge", entity=updated_entity)
+
+    # Verify updated class name and description
+    retrieved_entity = table_client.get_entity("AudioFiles", blob_name)
+    assert retrieved_entity["className"] == "Updated Class"
+    assert retrieved_entity["description"] == "Updated Description"

@@ -14,7 +14,11 @@
 		"ghcr.io/flexwie/devcontainer-features/op:1": {},
 		"ghcr.io/va-h/devcontainers-features/uv:1": {},
 		"ghcr.io/devcontainers/features/azure-cli:1": {}
-	}
+  },
+  "tasks": {
+    "test": "uv run pytest",
+    "build": "uv sync"
+  }
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	// "features": {},
