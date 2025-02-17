@@ -417,7 +417,7 @@ else:
     if st.button(
         "Sign In", key="sign_in_button", use_container_width=True, type="primary"
     ):
-        st.login(provider)
+        st.login()
 
 
 

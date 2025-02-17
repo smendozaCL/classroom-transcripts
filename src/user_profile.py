@@ -8,7 +8,7 @@ if st.experimental_user.get("is_logged_in"):
     # Get the user's sub (subject) ID from Auth0
     user_id = st.experimental_user.get("sub")
 else:
-    st.login(os.getenv("STREAMLIT_AUTH_PROVIDER"))
+    st.login()
 
 DEBUG = os.getenv("DEBUG", False)
 auth_provider = os.getenv("STREAMLIT_AUTH_PROVIDER", None)
