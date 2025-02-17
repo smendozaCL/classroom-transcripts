@@ -2,28 +2,21 @@ import streamlit as st
 import os
 from typing import List
 import requests
-from functools import lru_cache
 from time import time
 
 if st.experimental_user.get("is_logged_in"):
     # Get the user's sub (subject) ID from Auth0
     user_id = st.experimental_user.get("sub")
 else:
-    st.login(os.getenv("AUTH_PROVIDER"))
+    st.login(os.getenv("STREAMLIT_AUTH_PROVIDER"))
 
 DEBUG = os.getenv("DEBUG", False)
-auth_provider = os.getenv("AUTH_PROVIDER", "auth")
-domain = os.getenv("AUTH_DOMAIN", "")
+auth_provider = os.getenv("STREAMLIT_AUTH_PROVIDER")
+auth_dict = st.secrets.get(auth_provider, st.secrets.get("auth"))
+client_id = auth_dict.get("client_id")
+client_secret = auth_dict.get("client_secret")
+domain = auth_dict.get("domain")
 
-if DEBUG:
-    st.sidebar.write("=== Debug Information ===")
-    st.sidebar.write("Auth Provider:", auth_provider)
-    st.sidebar.write("Auth0 config exists:", bool(st.secrets.get("auth0")))
-    st.sidebar.write("Auth config exists:", bool(st.secrets.get("auth")))
-
-client_id = st.secrets.get(auth_provider, {}).get("client_id")
-client_secret = st.secrets.get(auth_provider, {}).get("client_secret")
-domain = st.secrets.get(auth_provider, {}).get("domain")
 
 def _get_management_api_token() -> str:
     """Get Auth0 Management API access token."""
@@ -120,8 +113,6 @@ def get_user_profile(user_id: str) -> dict:
     return profile
 
 
-
-
 # Main UI code
 st.title(st.experimental_user.get("name"))
 
@@ -144,7 +135,11 @@ with cols[1]:
         st.error(f"Error fetching roles: {str(e)}")
         if DEBUG:
             st.exception(e)
-    email_display = f"{user.get('email')} ✓" if user.get('email_verified') else "Email not verified."
+    email_display = (
+        f"{user.get('email')} ✓"
+        if user.get("email_verified")
+        else "Email not verified."
+    )
     st.write(email_display)
 
 

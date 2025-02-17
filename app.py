@@ -2,11 +2,11 @@ import streamlit as st
 import os
 import logging
 from dotenv import load_dotenv
-
+from src.utils.user_utils import get_user_roles
 load_dotenv()
 
 # Configure debug settings
-DEBUG = bool(os.getenv("DEBUG", "true"))  # Force debug mode temporarily
+DEBUG = bool(os.getenv("DEBUG", False))  # Force debug mode temporarily
 if DEBUG:
     logging.getLogger("watchdog").setLevel(logging.WARNING)
     logging.basicConfig(level=logging.DEBUG)
@@ -54,9 +54,14 @@ if st.experimental_user.get("is_logged_in"):
             st.image(st.experimental_user.get("picture"))
         with cols[1]:
             st.write(st.experimental_user.get("name"))
-            st.write(st.experimental_user.get("email"))
             email_display = f"{st.experimental_user.get('email')} ✓" if st.experimental_user.get('email_verified') else "Email not verified."
             st.write(email_display)
+            # Display admin and coach roles
+            roles = get_user_roles(st.experimental_user.get("user_id"))
+            if "admin" in roles:
+                st.write("Admin")
+            if "coach" in roles:
+                st.write("Coach")
             if st.button("Logout"):
                 st.logout()
 

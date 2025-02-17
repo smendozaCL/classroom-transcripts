@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . /app
+COPY ./.streamlit ./app/.streamlit
 
 # Install the project's dependencies using the lockfile and settings
 RUN uv sync --frozen --no-install-project --no-dev

@@ -413,7 +413,7 @@ else:
     if st.button(
         "Sign In", key="sign_in_button", use_container_width=True, type="primary"
     ):
-        st.login(os.getenv("AUTH_PROVIDER"))
+        st.login(os.getenv("STREAMLIT_AUTH_PROVIDER"))
 
 
 if feedback_email := os.getenv("FEEDBACK_EMAIL"):

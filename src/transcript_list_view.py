@@ -8,9 +8,15 @@ from azure.data.tables import UpdateMode, TableClient
 import logging
 from enum import Enum
 from typing import Optional
+from src.utils.user_utils import (
+    UserRole,
+    get_user_roles,
+    validate_user_permissions,
+    is_admin_or_coach,
+)
 
 if not st.experimental_user.get("is_logged_in"):
-    st.login(os.getenv("AUTH_PROVIDER"))
+    st.login(os.getenv("STREAMLIT_AUTH_PROVIDER"))
 
 # Initialize session state for status values if not already set
 if "transcription_statuses" not in st.session_state:
@@ -112,58 +118,8 @@ st.title("🔍 Audio Files & Transcriptions")
 # Initialize table client
 table_client = get_table_client()
 
-
-# Add at top of file after imports
-class UserRole(Enum):
-    ADMIN = "admin"
-    COACH = "coach"
-    USER = "user"  # Default role for authenticated users
-
-
-def get_user_role(user) -> Optional[UserRole]:
-    """Get user role with USER as default for authenticated users"""
-    if not user or not hasattr(user, "email"):
-        return None
-
-    try:
-        # Only accept specific known roles, default to USER otherwise
-        role = getattr(user, "role", "").lower()
-        if role in ("admin", "coach"):
-            return UserRole(role)
-        return UserRole.USER
-    except (ValueError, AttributeError):
-        return UserRole.USER
-
-
-def validate_user_permissions():
-    """Validate user is logged in and has valid email"""
-    if not st.experimental_user.get("is_logged_in"):
-        st.login(os.getenv("AUTH_PROVIDER"))
-        st.stop()
-
-    user = st.experimental_user
-    if not user or not getattr(user, "email", None):
-        st.error("User authentication failed - no valid email")
-        st.stop()
-
-    # Add email validation check
-    if not getattr(user, "email_validated", False):
-        st.error("Please verify your email address before accessing transcripts")
-        st.stop()
-
-    role = get_user_role(user)
-    if role is None:
-        st.error("User authentication failed - unable to determine role")
-        st.stop()
-
-    return user, role
-
-
-def is_admin_or_coach(role: Optional[UserRole]) -> bool:
-    """Check if user has admin/coach permissions"""
-    if role is None:
-        return False
-    return role in (UserRole.ADMIN, UserRole.COACH)
+# Replace existing user validation code with:
+user, role = validate_user_permissions()
 
 
 def can_view_transcript(transcript_email: str, user_email: str, role: UserRole) -> bool:
@@ -174,10 +130,6 @@ def can_view_transcript(transcript_email: str, user_email: str, role: UserRole) 
     if not transcript_email:
         return False
     return transcript_email.lower() == user_email.lower()
-
-
-# Replace existing code at top of file with:
-user, role = validate_user_permissions()
 
 
 @st.cache_data(ttl=300)
@@ -221,7 +173,7 @@ def load_table_data(_table_client):
     MIN_DATE = datetime(2000, 1, 1, tzinfo=pytz.UTC)
 
     if not user or not user.email:
-        return []  # Return empty list if no valid user
+        st.login(os.getenv("STREAMLIT_AUTH_PROVIDER"))
 
     try:
         # For regular users, only fetch their items
@@ -244,7 +196,7 @@ def load_table_data(_table_client):
 
             # Get uploader email, defaulting to None if not present
             uploader_email = item_dict.get("uploaderEmail")
-            
+
             # Only include items the user can view
             if not can_view_transcript(uploader_email, user.email, role):
                 continue
