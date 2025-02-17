@@ -44,7 +44,7 @@ def get_user_role(user) -> Optional[UserRole]:
 def validate_user_permissions():
     """Validate user is logged in and has valid email"""
     if not st.experimental_user.get("is_logged_in"):
-        st.login(os.getenv("STREAMLIT_AUTH_PROVIDER"))
+         st.login()
 
     user = st.experimental_user
     if not user or not getattr(user, "email", None):
