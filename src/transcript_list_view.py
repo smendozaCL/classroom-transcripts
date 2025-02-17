@@ -453,7 +453,7 @@ def display_table_data():
     with st.container():
         col1, col2 = st.columns([3, 1])
         with col1:
-            if st.button("Refresh Now", icon="��"):
+            if st.button("Refresh Now", icon="🔄"):
                 st.session_state.last_refresh = datetime.now(pytz.UTC)
                 st.cache_data.clear()
                 st.rerun()
