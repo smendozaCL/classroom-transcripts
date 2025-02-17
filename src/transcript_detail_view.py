@@ -17,6 +17,9 @@ from src.utils.table_client import get_table_client
 # Configure AssemblyAI
 aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
 
+# Retrieve access token from environment variable
+ACCESS_TOKEN = os.getenv("MGMT_API_ACCESS_TOKEN")
+
 
 def back_to_list():
     """Navigate back to the transcript list view."""
@@ -190,6 +193,9 @@ def get_cached_transcript_details(transcript_id: str) -> dict:
     if transcript.audio_url and "blob.core.windows.net" in transcript.audio_url:
         audio_url = transcript.audio_url
 
+    # Get metadata if available, otherwise use defaults
+    metadata = getattr(transcript, "metadata", {}) or {}
+
     return {
         "id": transcript.id,
         "text": transcript.text,
@@ -199,6 +205,8 @@ def get_cached_transcript_details(transcript_id: str) -> dict:
         "audio_duration": transcript.audio_duration,
         "language_code": getattr(transcript, "language_code", "en"),
         "confidence": getattr(transcript, "confidence", None),
+        "uploader_name": metadata.get("uploader_name", "Unknown"),
+        "uploader_email": metadata.get("uploader_email", "Not provided"),
     }
 
 
@@ -295,10 +303,16 @@ def show():
             if transcript.status == aai.TranscriptStatus.completed:
                 # Get timezone from session state
                 selected_timezone = st.session_state.timezone
-
+            
                 # Show transcript ID and status
                 st.header("📝 Transcript Details")
                 st.caption(f"ID: {selected_id}")
+
+                # Display uploader info if available
+                uploader_name = transcript_details["uploader_name"]
+                uploader_email = transcript_details["uploader_email"]
+                if uploader_name != "Unknown" or uploader_email != "Not provided":
+                    st.caption(f"Uploaded by: {uploader_name} ({uploader_email})")
 
                 # Main content tabs
                 tab_list = ["📝 Transcript", "💭 Insights"]

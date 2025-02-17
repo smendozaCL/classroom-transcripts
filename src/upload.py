@@ -13,6 +13,7 @@ from src.utils.azure_storage import get_blob_sas_url
 from urllib.parse import quote
 from src.utils.table_client import get_table_client
 
+DEBUG = bool(os.getenv("DEBUG", False))
 
 def get_azure_credential():
     """Get Azure credential using service principal."""
@@ -338,7 +339,7 @@ def handle_successful_upload(upload_result, transcript):
     )
 
 
-if st.experimental_user.is_logged_in:
+if st.experimental_user.get("is_logged_in"):
     st.subheader("Upload a Class Recording", divider=True)
     st.write("We'll generate a transcript and post it for you and your coach.")
 
@@ -432,11 +433,16 @@ if st.experimental_user.is_logged_in:
                         st.error("Upload to storage failed - please try again")
 
 else:
+    provider = os.getenv("STREAMLIT_AUTH_PROVIDER", None)
+    if DEBUG:
+        st.write(f"Provider: {provider}")
     if st.button(
         "Sign In", key="sign_in_button", use_container_width=True, type="primary"
     ):
         st.login()
 
 
+
 if feedback_email := os.getenv("FEEDBACK_EMAIL"):
     st.caption(f"📧 Help and feedback: {feedback_email}")
+

@@ -17,6 +17,7 @@ dependencies = [
     "pytz>=2025.1",
     "wordcloud>=1.9.4",
     "cryptography>=44.0.1",
+    "requests>=2.32.3",
 ]
 
 [tool.uv]
