@@ -262,7 +262,9 @@ async def submit_transcription(url: str) -> dict:
         return {"id": "error", "file_url": url, "status": "error", "error": str(e)}
 
 
-async def store_mapping_in_table(blob_dict: dict, transcript_dict: dict, class_name: str, description: str):
+async def store_mapping_in_table(
+    blob_dict: dict, transcript_dict: dict, class_name: str, description: str
+):
     """Store the mapping between uploaded file and its transcript."""
     try:
         table_client = get_table_client()
@@ -302,19 +304,7 @@ async def store_mapping_in_table(blob_dict: dict, transcript_dict: dict, class_n
 
 def handle_successful_upload(upload_result, transcript):
     """Handle successful upload and transcription submission"""
-    st.success("✅ Transcription submitted successfully!")
-
-    # Create a link that will work with your Streamlit multipage app
-    st.info(
-        "We're processing your file. You can upload another file, or go to the menu to view your transcripts."
-    )
-
-    logging.info(
-        f"'{upload_result['name']}' (original: '{upload_result['original_name']}') "
-        f"submitted for transcription"
-    )
-
-    # Store the upload info in session state instead of clearing cache
+    # Store the upload info in session state
     if "recent_uploads" not in st.session_state:
         st.session_state.recent_uploads = []
 
@@ -326,13 +316,31 @@ def handle_successful_upload(upload_result, transcript):
         }
     )
 
+    # Show confirmation with details
+    st.success("✅ File uploaded successfully!")
+
+    with st.expander("Submission Details", expanded=True):
+        st.markdown(f"""
+        ### 📝 Transcript Details
+        - **Class**: {class_name}
+        - **File**: {upload_result["original_name"]}
+        - **Size**: {upload_result["size"] / 1024 / 1024:.1f} MB
+        - **Transcript ID**: `{transcript["id"]}`
+        
+        Your file is being processed. You can:
+        - Upload another recording
+        - View your transcripts in the sidebar menu
+        """)
+
+    logging.info(
+        f"'{upload_result['name']}' (original: '{upload_result['original_name']}') "
+        f"submitted for transcription"
+    )
+
 
 if st.experimental_user.is_logged_in:
     st.subheader("Upload a Class Recording", divider=True)
     st.write("We'll generate a transcript and post it for you and your coach.")
-
-    class_name = st.text_input("Class Name", value="")
-    description = st.text_area("Description", value="")
 
     if uploaded_file := st.file_uploader(
         "Choose an audio file",
@@ -368,34 +376,60 @@ if st.experimental_user.is_logged_in:
             "wv",
         ],
     ):
-        if st.button("Submit"):
-            if upload_result := upload_to_azure(uploaded_file):
-                blob_sas_url = get_blob_sas_url(
-                    blob_name=upload_result["name"],
-                    container_name=uploads_container,
-                    storage_account=storage_account,
-                    storage_account_key=storage_account_key,
-                )
+        # Get filename without extension for default class name
+        default_class_name = os.path.splitext(uploaded_file.name)[0]
 
-                safe_url = quote(blob_sas_url, safe=":/?&=%")
-                markdown_link = f"[{upload_result['original_name']}]({safe_url})"
-                st.success(f"Uploaded file to Azure: {markdown_link}")
+        # Show form after file is selected
+        with st.form("upload_details"):
+            st.write("### Add Details")
+            class_name = st.text_input("Class Name", value=default_class_name)
+            description = st.text_area(
+                "Description (optional)",
+                value="",
+                help="Optional: Add any notes about this recording that might be helpful for your coach.",
+            )
 
-                transcript = asyncio.run(submit_transcription(safe_url))
-                if transcript["status"] == "queued":
-                    # Store mapping in table
-                    asyncio.run(store_mapping_in_table(upload_result, transcript, class_name, description))
+            submit_button = st.form_submit_button("Submit")
 
-                    # Use the new handler function instead of directly clearing cache
-                    handle_successful_upload(upload_result, transcript)
-
+            if submit_button:
+                if not class_name.strip():
+                    st.error("Please enter a class name")
                 else:
-                    st.error("Transcription submission failed - please try again.")
-                    logging.error(
-                        f"Transcription failed with status: {transcript['status']}"
-                    )
-            else:
-                st.error("Upload to storage failed - please try again")
+                    if upload_result := upload_to_azure(uploaded_file):
+                        blob_sas_url = get_blob_sas_url(
+                            blob_name=upload_result["name"],
+                            container_name=uploads_container,
+                            storage_account=storage_account,
+                            storage_account_key=storage_account_key,
+                        )
+
+                        safe_url = quote(blob_sas_url, safe=":/?&=%")
+                        markdown_link = (
+                            f"[{upload_result['original_name']}]({safe_url})"
+                        )
+                        st.success(f"Uploaded file to Azure: {markdown_link}")
+
+                        transcript = asyncio.run(submit_transcription(safe_url))
+                        if transcript["status"] == "queued":
+                            # Store mapping in table
+                            asyncio.run(
+                                store_mapping_in_table(
+                                    upload_result, transcript, class_name, description
+                                )
+                            )
+
+                            # Use the new handler function instead of directly clearing cache
+                            handle_successful_upload(upload_result, transcript)
+
+                        else:
+                            st.error(
+                                "Transcription submission failed - please try again."
+                            )
+                            logging.error(
+                                f"Transcription failed with status: {transcript['status']}"
+                            )
+                    else:
+                        st.error("Upload to storage failed - please try again")
 
 else:
     if st.button(
