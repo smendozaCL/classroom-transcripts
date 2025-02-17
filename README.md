@@ -180,6 +180,7 @@ classroom-transcripts/
 | `AZURE_STORAGE_ACCOUNT` | Azure Storage account name | Yes      | -              |
 | `AZURE_FUNCTION_KEY`    | Function app key           | Yes      | -              |
 | `WEBSITE_HOSTNAME`      | Function app hostname      | No       | localhost:7071 |
+| `MGMT_API_ACCESS_TOKEN` | Management API access token| Yes      | -              |
 
 See `.env.example` for a complete list of configuration options.
 
@@ -205,6 +206,8 @@ This is a web app that supports teachers and curriculum coaches in analyzing cla
 
 - Teachers can upload audio files and analyze them with a focus on the teacher's voice, the student's voice, and the overall classroom discussion.
 - Uploaded audio files are transcribed and published to a Google Drive folder.
+- Coaches and admins can see all transcripts.
+- List and detail views show the name and email of the uploading user.
 
 ## Automate Azure Resource Creation
 
@@ -263,6 +266,9 @@ This is a web app that supports teachers and curriculum coaches in analyzing cla
    # Client Configuration
    ORGANIZATION_NAME="your_organization_name"
    FEEDBACK_EMAIL="your_feedback_email"
+
+   # Management API Access Token
+   MGMT_API_ACCESS_TOKEN="your_management_api_access_token"
    ```
 
 3. **Use GitHub Actions for Deployment**:

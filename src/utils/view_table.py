@@ -1,6 +1,6 @@
 """Utility script to view Azure Table Storage contents."""
 from azure.data.tables import TableServiceClient
-from azure.identity import DefaultAzureCredential, ClientSecretCredential
+from azure.identity import DefaultAzureCredential
 import os
 from dotenv import load_dotenv
 
