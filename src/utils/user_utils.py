@@ -16,17 +16,17 @@ def get_user_roles(user_id: str) -> list[str]:
         # This would normally make an API call, but for now we'll use test data
         roles_response = [
             {
-                'id': 'rol_r8ffU4ugDVHFC3t4',
-                'name': 'admin',
-                'description': 'Admins have access to all transcripts'
+                "id": "rol_r8ffU4ugDVHFC3t4",
+                "name": "admin",
+                "description": "Admins have access to all transcripts",
             },
             {
-                'id': 'rol_bsM0EfGznfEQuspR', 
-                'name': 'coach',
-                'description': 'Instructional coaches'
-            }
+                "id": "rol_bsM0EfGznfEQuspR",
+                "name": "coach",
+                "description": "Instructional coaches",
+            },
         ]
-        return [role['name'].lower() for role in roles_response]
+        return [role["name"].lower() for role in roles_response]
     except Exception as e:
         st.error(f"Error getting user roles: {str(e)}")
         return []
@@ -40,13 +40,13 @@ def get_user_role(user) -> Optional[UserRole]:
     try:
         # Get roles from API response
         roles = get_user_roles(getattr(user, "user_id", None))
-        
+
         # Check for admin/coach roles
         if "admin" in roles:
             return UserRole.ADMIN
         if "coach" in roles:
             return UserRole.COACH
-            
+
         return UserRole.USER
     except (ValueError, AttributeError):
         return UserRole.USER
