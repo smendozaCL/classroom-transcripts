@@ -38,10 +38,10 @@ detail_page = st.Page(
 # Build pages list based on debug setting
 pages_list = [upload_page]
 
-if st.experimental_user.is_logged_in:
+if st.experimental_user.get("is_logged_in"):
     profile_page = st.Page(
         "src/user_profile.py",
-        title=st.experimental_user.name,
+        title=st.experimental_user.get("name"),
         icon="👤",
         url_path="/profile",
     )
@@ -51,11 +51,12 @@ if st.experimental_user.is_logged_in:
     with st.sidebar:
         cols = st.columns([1, 3])
         with cols[0]:
-            st.image(st.experimental_user.picture)
+            st.image(st.experimental_user.get("picture"))
         with cols[1]:
-            st.write(st.experimental_user.name)
-            st.write(st.experimental_user.email)
-            st.write(f"Role: {st.experimental_user.role}")  # Display user role
+            st.write(st.experimental_user.get("name"))
+            st.write(st.experimental_user.get("email"))
+            email_display = f"{st.experimental_user.get('email')} ✓" if st.experimental_user.get('email_verified') else "Email not verified."
+            st.write(email_display)
             if st.button("Logout"):
                 st.logout()
 

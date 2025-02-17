@@ -343,7 +343,7 @@ def handle_successful_upload(upload_result, transcript):
     )
 
 
-if st.experimental_user.is_logged_in:
+if st.experimental_user.get("is_logged_in"):
     st.subheader("Upload a Class Recording", divider=True)
     st.write("We'll generate a transcript and post it for you and your coach.")
 
@@ -413,7 +413,7 @@ else:
     if st.button(
         "Sign In", key="sign_in_button", use_container_width=True, type="primary"
     ):
-        st.login()
+        st.login(os.getenv("AUTH_PROVIDER"))
 
 
 if feedback_email := os.getenv("FEEDBACK_EMAIL"):

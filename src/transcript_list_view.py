@@ -6,9 +6,11 @@ import assemblyai as aai
 import os
 from azure.data.tables import UpdateMode, TableClient
 import logging
+from enum import Enum
+from typing import Optional
 
-if not st.experimental_user.is_logged_in:
-    st.login()
+if not st.experimental_user.get("is_logged_in"):
+    st.login(os.getenv("AUTH_PROVIDER"))
 
 # Initialize session state for status values if not already set
 if "transcription_statuses" not in st.session_state:
@@ -111,6 +113,73 @@ st.title("🔍 Audio Files & Transcriptions")
 table_client = get_table_client()
 
 
+# Add at top of file after imports
+class UserRole(Enum):
+    ADMIN = "admin"
+    COACH = "coach"
+    USER = "user"  # Default role for authenticated users
+
+
+def get_user_role(user) -> Optional[UserRole]:
+    """Get user role with USER as default for authenticated users"""
+    if not user or not hasattr(user, "email"):
+        return None
+
+    try:
+        # Only accept specific known roles, default to USER otherwise
+        role = getattr(user, "role", "").lower()
+        if role in ("admin", "coach"):
+            return UserRole(role)
+        return UserRole.USER
+    except (ValueError, AttributeError):
+        return UserRole.USER
+
+
+def validate_user_permissions():
+    """Validate user is logged in and has valid email"""
+    if not st.experimental_user.get("is_logged_in"):
+        st.login(os.getenv("AUTH_PROVIDER"))
+        st.stop()
+
+    user = st.experimental_user
+    if not user or not getattr(user, "email", None):
+        st.error("User authentication failed - no valid email")
+        st.stop()
+
+    # Add email validation check
+    if not getattr(user, "email_validated", False):
+        st.error("Please verify your email address before accessing transcripts")
+        st.stop()
+
+    role = get_user_role(user)
+    if role is None:
+        st.error("User authentication failed - unable to determine role")
+        st.stop()
+
+    return user, role
+
+
+def is_admin_or_coach(role: Optional[UserRole]) -> bool:
+    """Check if user has admin/coach permissions"""
+    if role is None:
+        return False
+    return role in (UserRole.ADMIN, UserRole.COACH)
+
+
+def can_view_transcript(transcript_email: str, user_email: str, role: UserRole) -> bool:
+    """Check if user can view a specific transcript"""
+    if is_admin_or_coach(role):
+        return True
+    # If no uploader email is set, only admins/coaches can view
+    if not transcript_email:
+        return False
+    return transcript_email.lower() == user_email.lower()
+
+
+# Replace existing code at top of file with:
+user, role = validate_user_permissions()
+
+
 @st.cache_data(ttl=300)
 def get_transcript_statuses():
     """Get all transcript statuses in one API call"""
@@ -147,71 +216,85 @@ def get_transcript_statuses():
 
 
 @st.cache_data(ttl=300)
-def load_table_data(_table_client, user_email, user_role):
+def load_table_data(_table_client):
     """Load and process table data with caching"""
-    # Define a reasonable minimum date (e.g., year 2000)
     MIN_DATE = datetime(2000, 1, 1, tzinfo=pytz.UTC)
 
-    # Get items and filter by current user
-    items = list_table_items(_table_client)
-    if not items:
-        return []
+    if not user or not user.email:
+        return []  # Return empty list if no valid user
 
-    # Get all transcript statuses at once
-    transcript_statuses = get_transcript_statuses()
-
-    items_list = []
-
-    for i, item in enumerate(items):
-        item_dict = dict(item)
-        # Normalize both user_role and uploaderEmail to lowercase for a consistent comparison.
-        if (user_role or "").lower() != "coach" and item_dict.get(
-            "uploaderEmail", ""
-        ).lower() != user_email.lower():
-            continue
-
-        # Add formatted size
-        if "blobSize" in item_dict:
-            item_dict["formatted_size"] = format_file_size(item_dict["blobSize"])
-
-        # Get status from cached transcript statuses
-        if "transcriptId" in item_dict:
-            item_dict["status"] = transcript_statuses.get(
-                item_dict["transcriptId"], "error"
-            )
+    try:
+        # For regular users, only fetch their items
+        if not is_admin_or_coach(role):
+            filter_condition = f"uploaderEmail eq '{user.email.lower()}'"
+            items = list(table_client.query_entities(filter_condition))
         else:
-            item_dict["status"] = "pending"
+            # Admins/coaches can see all items
+            items = list_table_items(_table_client)
 
-        item_dict["_previous_status"] = item_dict["status"]
+        if not items:
+            return []
 
-        # Process timestamp
-        if "uploadTime" not in item_dict:
-            item_dict["uploadTime"] = item_dict.get("Timestamp", MIN_DATE)
+        # Get all transcript statuses at once
+        transcript_statuses = get_transcript_statuses()
+        items_list = []
 
-        try:
-            # Handle different timestamp types
-            if isinstance(item_dict["uploadTime"], str):
-                dt = datetime.fromisoformat(
-                    item_dict["uploadTime"].replace("Z", "+00:00")
+        for item in items:
+            item_dict = dict(item)
+
+            # Get uploader email, defaulting to None if not present
+            uploader_email = item_dict.get("uploaderEmail")
+            
+            # Only include items the user can view
+            if not can_view_transcript(uploader_email, user.email, role):
+                continue
+
+            # Add formatted size
+            if "blobSize" in item_dict:
+                item_dict["formatted_size"] = format_file_size(item_dict["blobSize"])
+
+            # Get status from cached transcript statuses
+            if "transcriptId" in item_dict:
+                item_dict["status"] = transcript_statuses.get(
+                    item_dict["transcriptId"], "error"
                 )
-            elif isinstance(item_dict["uploadTime"], datetime):
-                dt = item_dict["uploadTime"]
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=pytz.UTC)
             else:
-                dt = MIN_DATE
+                item_dict["status"] = "pending"
 
-            local_dt = dt.astimezone(local_tz)
-            item_dict["_timestamp"] = local_dt
-            item_dict["uploadTime"] = local_dt
-        except ValueError as e:
-            logging.error(f"Error parsing time: {e}")
-            item_dict["_timestamp"] = MIN_DATE
-            item_dict["uploadTime"] = MIN_DATE
+            item_dict["_previous_status"] = item_dict["status"]
 
-        items_list.append(item_dict)
+            # Process timestamp
+            if "uploadTime" not in item_dict:
+                item_dict["uploadTime"] = item_dict.get("Timestamp", MIN_DATE)
 
-    return items_list
+            try:
+                # Handle different timestamp types
+                if isinstance(item_dict["uploadTime"], str):
+                    dt = datetime.fromisoformat(
+                        item_dict["uploadTime"].replace("Z", "+00:00")
+                    )
+                elif isinstance(item_dict["uploadTime"], datetime):
+                    dt = item_dict["uploadTime"]
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=pytz.UTC)
+                else:
+                    dt = MIN_DATE
+
+                local_dt = dt.astimezone(local_tz)
+                item_dict["_timestamp"] = local_dt
+                item_dict["uploadTime"] = local_dt
+            except ValueError as e:
+                logging.error(f"Error parsing time: {e}")
+                item_dict["_timestamp"] = MIN_DATE
+                item_dict["uploadTime"] = MIN_DATE
+
+            items_list.append(item_dict)
+
+        return items_list
+
+    except Exception as e:
+        logging.error(f"Error loading table data: {e}")
+        return []
 
 
 @st.cache_data(ttl=30)  # Cache for 30 seconds only for pending items
@@ -338,18 +421,21 @@ def display_transcript_item(item):
 
 def display_status_overview(items_list):
     """Display status overview in a fragment"""
-    user = st.experimental_user
-    # For non-coach users, ensure we only count items that belong to them.
-    if (getattr(user, "role", "")).lower() not in ["coach", "admin"]:
-        items_list = [
-            i
-            for i in items_list
-            if i.get("uploaderEmail", "").lower() == user.email.lower()
-        ]
-    total_items = len(items_list)
-    completed_items = len([i for i in items_list if i.get("status") == "completed"])
-    processing_items = len([i for i in items_list if i.get("status") == "processing"])
-    error_items = len([i for i in items_list if i.get("status") in ["error", "failed"]])
+    # Only count items the user has permission to see
+    viewable_items = [
+        item
+        for item in items_list
+        if can_view_transcript(item.get("uploaderEmail", ""), user.email, role)
+    ]
+
+    total_items = len(viewable_items)
+    completed_items = len([i for i in viewable_items if i.get("status") == "completed"])
+    processing_items = len(
+        [i for i in viewable_items if i.get("status") == "processing"]
+    )
+    error_items = len(
+        [i for i in viewable_items if i.get("status") in ["error", "failed"]]
+    )
 
     st.subheader("📊 Overview")
     col1, col2, col3, col4 = st.columns(4)
@@ -367,9 +453,7 @@ def display_table_data():
     """Display the table data with progress indicators"""
     user = st.experimental_user
     with st.spinner("Loading transcripts..."):
-        items_list = load_table_data(
-            table_client, user.email, getattr(user, "role", None)
-        )
+        items_list = load_table_data(table_client)
 
     if not items_list:
         st.info("No files found in the system")
@@ -388,7 +472,7 @@ def display_table_data():
             st.cache_data.clear()
             st.rerun()
 
-    # Display status overview in a fragment
+    # Display status overview with already filtered list
     with st.container():
         display_status_overview(items_list)
         st.divider()
@@ -449,7 +533,7 @@ def display_table_data():
     with st.container():
         col1, col2 = st.columns([3, 1])
         with col1:
-            if st.button("Refresh Now", icon="��"):
+            if st.button("Refresh Now", icon="🔄"):
                 st.session_state.last_refresh = datetime.now(pytz.UTC)
                 st.cache_data.clear()
                 st.rerun()
@@ -469,14 +553,12 @@ def list_all_mappings():
         connection_string, table_name="TranscriptMappings"
     )
 
-    entities = table_client.list_entities()
-    entities_list = list(entities)
-    user = st.experimental_user
-    # Only filter by uploaderEmail if the user is NOT a coach.
-    if (getattr(user, "role", "")).lower() not in ["coach", "admin"]:
-        entities_list = [
-            entity
-            for entity in entities_list
-            if entity.get("uploaderEmail", "").lower() == user.email.lower()
-        ]
-    return entities_list
+    # For regular users, only fetch their mappings
+    if not is_admin_or_coach(role):
+        filter_condition = f"uploaderEmail eq '{user.email.lower()}'"
+        entities = table_client.query_entities(filter_condition)
+    else:
+        # Admins/coaches can see all mappings, including those without uploaderEmail
+        entities = table_client.list_entities()
+
+    return list(entities)
