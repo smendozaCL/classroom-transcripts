@@ -12,6 +12,7 @@ from typing import Optional
 import altair as alt
 from src.utils.azure_storage import get_blob_sas_url
 from src.upload import get_account_key_from_connection_string
+from src.utils.table_client import get_table_client
 
 # Configure AssemblyAI
 aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
@@ -304,7 +305,7 @@ def show():
                 selected_timezone = st.session_state.timezone
             
                 # Show transcript ID and status
-                st.header(f"📝 Transcript Details")
+                st.header("📝 Transcript Details")
                 st.caption(f"ID: {selected_id}")
 
                 # Display uploader info if available

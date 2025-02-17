@@ -240,7 +240,11 @@ def load_table_data(_table_client):
                 item_dict["_timestamp"] = MIN_DATE
                 item_dict["uploadTime"] = MIN_DATE
 
-            items_list.append(item_dict)
+        # Add class name and description
+        item_dict["className"] = item_dict.get("className", "N/A")
+        item_dict["description"] = item_dict.get("description", "N/A")
+
+        items_list.append(item_dict)
 
         return items_list
 
@@ -314,8 +318,8 @@ def display_transcript_item(item):
         | Uploaded | {upload_time_str} |
         | Status | {status_color} {status.title()} |
         | Transcript ID | `{item.get("transcriptId", "N/A")}` |
-        | Uploader Name | {item.get("uploaderName", "N/A")} |
-        | Uploader Email | {item.get("uploaderEmail", "N/A")} |
+        | Class Name | {item.get("className", "N/A")} |
+        | Description | {item.get("description", "N/A")} |
         """)
 
         # Actions row
@@ -485,6 +489,7 @@ def display_table_data():
     with st.container():
         col1, col2 = st.columns([3, 1])
         with col1:
+            if st.button("Refresh Now", icon="🔄"):
             if st.button("Refresh Now", icon="🔄"):
                 st.session_state.last_refresh = datetime.now(pytz.UTC)
                 st.cache_data.clear()

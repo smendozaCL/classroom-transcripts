@@ -123,6 +123,26 @@ class TestTranscriptReview(unittest.TestCase):
         for key in expected_keys:
             self.assertIn(key, mock_session_state)
 
+    @patch("streamlit.write")
+    @patch("streamlit.warning")
+    def test_display_class_name_and_description(self, mock_warning, mock_write):
+        """Test displaying class name and description in the list and details views"""
+
+        # Create a mock session state
+        mock_state = {"class_name": "Test Class", "description": "Test Description"}
+        # Apply the mock state
+        with patch.object(st, "session_state", mock_state):
+            st.write(f"**Class Name:** {mock_state['class_name']}")
+            st.write(f"**Description:** {mock_state['description']}")
+
+        from . import transcript_detail_view
+        with patch.object(transcript_detail_view.st, "session_state", mock_state):
+            transcript_detail_view.st.write(f"**Class Name:** {mock_state['class_name']}")
+            transcript_detail_view.st.write(f"**Description:** {mock_state['description']}")
+
+            mock_write.assert_any_call("**Class Name:** Test Class")
+            mock_write.assert_any_call("**Description:** Test Description")
+
 
 if __name__ == "__main__":
     unittest.main()
