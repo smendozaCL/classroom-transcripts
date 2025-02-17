@@ -11,12 +11,13 @@ else:
     st.login(os.getenv("STREAMLIT_AUTH_PROVIDER"))
 
 DEBUG = os.getenv("DEBUG", False)
-auth_provider = os.getenv("STREAMLIT_AUTH_PROVIDER")
-auth_dict = st.secrets.get(auth_provider, st.secrets.get("auth"))
-client_id = auth_dict.get("client_id")
-client_secret = auth_dict.get("client_secret")
-domain = auth_dict.get("domain")
-
+auth_provider = os.getenv("STREAMLIT_AUTH_PROVIDER", None)
+if auth_provider is not None:
+    auth_dict = st.secrets.get(auth_provider, st.secrets.get("auth"))
+    client_id = auth_dict.get("client_id")
+    client_secret = auth_dict.get("client_secret")
+    domain = auth_dict.get("domain")
+    
 
 def _get_management_api_token() -> str:
     """Get Auth0 Management API access token."""

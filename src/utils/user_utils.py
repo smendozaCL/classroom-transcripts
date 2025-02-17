@@ -13,20 +13,9 @@ class UserRole(Enum):
 def get_user_roles(user_id: str) -> list[str]:
     """Get list of role names from user roles response"""
     try:
-        # This would normally make an API call, but for now we'll use test data
-        roles_response = [
-            {
-                "id": "rol_r8ffU4ugDVHFC3t4",
-                "name": "admin",
-                "description": "Admins have access to all transcripts",
-            },
-            {
-                "id": "rol_bsM0EfGznfEQuspR",
-                "name": "coach",
-                "description": "Instructional coaches",
-            },
-        ]
-        return [role["name"].lower() for role in roles_response]
+        # For now return empty list since role API is not implemented
+        # TODO: Implement actual role API integration
+        return []
     except Exception as e:
         st.error(f"Error getting user roles: {str(e)}")
         return []

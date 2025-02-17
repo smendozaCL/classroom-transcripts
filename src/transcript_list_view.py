@@ -16,7 +16,7 @@ from src.utils.user_utils import (
 )
 
 if not st.experimental_user.get("is_logged_in"):
-    st.login(os.getenv("STREAMLIT_AUTH_PROVIDER"))
+    st.login(os.getenv("STREAMLIT_AUTH_PROVIDER", None))
 
 # Initialize session state for status values if not already set
 if "transcription_statuses" not in st.session_state:
@@ -173,7 +173,7 @@ def load_table_data(_table_client):
     MIN_DATE = datetime(2000, 1, 1, tzinfo=pytz.UTC)
 
     if not user or not user.email:
-        st.login(os.getenv("STREAMLIT_AUTH_PROVIDER"))
+        st.login(os.getenv("STREAMLIT_AUTH_PROVIDER", None))
 
     try:
         # For regular users, only fetch their items

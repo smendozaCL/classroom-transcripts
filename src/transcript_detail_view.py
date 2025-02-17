@@ -19,6 +19,7 @@ aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
 # Retrieve access token from environment variable
 ACCESS_TOKEN = os.getenv("MGMT_API_ACCESS_TOKEN")
 
+
 def back_to_list():
     """Navigate back to the transcript list view."""
     st.session_state.selected_transcript = None
@@ -192,8 +193,8 @@ def get_cached_transcript_details(transcript_id: str) -> dict:
         audio_url = transcript.audio_url
 
     # Get metadata if available, otherwise use defaults
-    metadata = getattr(transcript, 'metadata', {}) or {}
-    
+    metadata = getattr(transcript, "metadata", {}) or {}
+
     return {
         "id": transcript.id,
         "text": transcript.text,
@@ -301,14 +302,14 @@ def show():
             if transcript.status == aai.TranscriptStatus.completed:
                 # Get timezone from session state
                 selected_timezone = st.session_state.timezone
-
+            
                 # Show transcript ID and status
                 st.header(f"📝 Transcript Details")
                 st.caption(f"ID: {selected_id}")
 
                 # Display uploader info if available
-                uploader_name = transcript_details['uploader_name']
-                uploader_email = transcript_details['uploader_email']
+                uploader_name = transcript_details["uploader_name"]
+                uploader_email = transcript_details["uploader_email"]
                 if uploader_name != "Unknown" or uploader_email != "Not provided":
                     st.caption(f"Uploaded by: {uploader_name} ({uploader_email})")
 
