@@ -4,16 +4,19 @@ from datetime import datetime
 import pytz
 import assemblyai as aai
 import os
-from azure.data.tables import UpdateMode, TableClient
 import logging
-from enum import Enum
-from typing import Optional
-from src.utils.user_utils import (
-    UserRole,
-    get_user_roles,
-    validate_user_permissions,
-    is_admin_or_coach,
+from docx import Document
+from io import BytesIO
+import pydantic
+
+from utils.azure_storage import get_sas_url_for_audio_file_name
+
+DEBUG = bool(st.secrets.get("DEBUG", False))
+table_name = st.session_state.get(
+    "table_name", st.secrets.get("AZURE_STORAGE_TABLE_NAME")
 )
+TRANSCRIPT_PREVIEW_MAX_LENGTH = 1000
+TRANSCRIPT_PREVIEW_SPEAKER_TURNS = 5
 
 if not st.experimental_user.get("is_logged_in"):
     st.login()
@@ -27,12 +30,6 @@ if "transcription_statuses" not in st.session_state:
         "error",  # Failed
         "failed",  # Another error state
     ]
-
-# Initialize session state for auto-refresh
-if "auto_refresh" not in st.session_state:
-    st.session_state.auto_refresh = True
-if "last_refresh" not in st.session_state:
-    st.session_state.last_refresh = datetime.now(pytz.UTC)
 
 # US timezone options
 US_TIMEZONES = [
@@ -61,6 +58,7 @@ with st.sidebar:
 # Update local_tz to use session state
 local_tz = pytz.timezone(st.session_state.timezone)
 
+
 # Initialize AssemblyAI client
 aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
 transcriber = aai.Transcriber()
@@ -70,6 +68,20 @@ if "items_per_page" not in st.session_state:
     st.session_state.items_per_page = 5  # Initial number of items to show
 if "current_page" not in st.session_state:
     st.session_state.current_page = 1
+
+# Get admin emails from Streamlit secrets
+ADMIN_EMAILS = [
+    email.strip().lower() for email in st.secrets.get("admin_emails", "").split(",")
+]
+
+# Debug logging for admin list
+if DEBUG:
+    st.write("Debug - Admin emails:", ADMIN_EMAILS)
+
+
+def is_admin(email: str) -> bool:
+    """Check if the given email belongs to an admin"""
+    return email.lower() in ADMIN_EMAILS
 
 
 def reset_pagination():
@@ -92,9 +104,11 @@ def format_file_size(size_in_bytes):
 # Get timezone abbreviation
 
 
-def get_timezone_abbr(tz):
-    """Get timezone abbreviation (e.g., PST, EST)"""
-    return datetime.now(pytz.timezone(tz)).strftime("%Z")
+def localized_timestamp(timestamp):
+    """Get localized timestamp"""
+    local_timestamp = timestamp.astimezone(local_tz)
+    time_string = local_timestamp.strftime("%Y-%m-%d %H:%M:%S %Z")
+    return time_string
 
 
 def get_transcript_status(transcript_id):
@@ -113,49 +127,156 @@ def get_transcript_status(transcript_id):
         return "error"
 
 
+def generate_transcript_markdown(transcript, max_length=None, max_speaker_turns=None):
+    """
+    Generate markdown formatted text from an AssemblyAI transcript.
+
+    Args:
+        transcript: AssemblyAI Transcript object
+        max_length (int, optional): Maximum length of text to include
+        max_speaker_turns (int, optional): Maximum number of speaker turns to include
+
+    Returns:
+        str: Markdown formatted transcript text
+    """
+    if not transcript:
+        return "No transcript available"
+
+    markdown_lines = []
+
+    # Handle transcripts with speaker detection
+    if transcript.utterances:
+        for i, utterance in enumerate(transcript.utterances):
+            # Break if we've hit the max speaker turns
+            if max_speaker_turns and i >= max_speaker_turns:
+                markdown_lines.append(
+                    "\n*[Additional transcript content truncated...]*"
+                )
+                break
+
+            # Format timestamp as [00:00:00]
+            start_seconds = utterance.start / 1000.0  # Convert milliseconds to seconds
+            hours = int(start_seconds // 3600)
+            minutes = int((start_seconds % 3600) // 60)
+            seconds = int(start_seconds % 60)
+            timestamp = f"[{hours:02d}:{minutes:02d}:{seconds:02d}]"
+
+            # Format as [timestamp] **Speaker X**: text
+            speaker_letter = (
+                chr(65 + (utterance.speaker - 1))
+                if isinstance(utterance.speaker, int)
+                else utterance.speaker
+            )
+            speaker_text = f"{timestamp} **Speaker {speaker_letter}**: {utterance.text}"
+            markdown_lines.append(speaker_text)
+
+            # Check total length if max_length specified
+            current_text = "\n".join(markdown_lines)
+            if max_length and len(current_text) >= max_length:
+                truncate_length = max_length - len(
+                    "\n\n*[Additional transcript content truncated...]*"
+                )
+                markdown_lines[-1] = str(markdown_lines[-1])[:truncate_length]
+                markdown_lines.append(
+                    "\n*[Additional transcript content truncated...]*"
+                )
+                break
+
+    # Handle transcripts without speaker detection
+    elif transcript.text:
+        text = transcript.text
+        if max_length:
+            truncate_length = max_length
+            text = str(text)[:truncate_length] + (
+                "..." if len(transcript.text) > truncate_length else ""
+            )
+        markdown_lines.append(text)
+
+    return "\n\n".join(markdown_lines)
+
+
+def generate_transcript_docx(transcript):
+    """
+    Generate a docx file from an AssemblyAI transcript.
+
+    Args:
+        transcript: AssemblyAI Transcript object
+
+    Returns:
+        bytes: The generated docx file as bytes
+    """
+    doc = Document()
+    doc.add_heading("Transcript", 0)
+
+    if transcript.utterances:
+        # Add each speaker's text as a paragraph
+        for utterance in transcript.utterances:
+            p = doc.add_paragraph()
+            # Add speaker label in bold
+            speaker_run = p.add_run(f"Speaker {utterance.speaker}: ")
+            speaker_run.bold = True
+            # Add the text
+            p.add_run(utterance.text)
+            # Add spacing between utterances
+            p.add_run("\n")
+    else:
+        # Add the full text as a single paragraph
+        doc.add_paragraph(transcript.text)
+
+    # Add metadata
+    doc.core_properties.title = "Transcript"
+    doc.core_properties.comments = "Generated from AssemblyAI transcription"
+
+    # Save to bytes
+    docx_bytes = BytesIO()
+    doc.save(docx_bytes)
+    docx_bytes.seek(0)
+    return docx_bytes.getvalue()
+
+
 st.title("🔍 Audio Files & Transcriptions")
 
 # Initialize table client
-table_client = get_table_client()
+table_client = get_table_client(table_name)
 
-# Replace existing user validation code with:
-user, role = validate_user_permissions()
+if DEBUG:
+    st.write(
+        f"Debug - Table name: {st.session_state.get('table_name', 'Transcriptions')}"
+    )
 
 
-def can_view_transcript(transcript_email: str, user_email: str, role: UserRole) -> bool:
+def can_view_transcript(transcript_email: str, user_email: str) -> bool:
     """Check if user can view a specific transcript"""
-    if is_admin_or_coach(role):
+    if is_admin(user_email):
         return True
-    # If no uploader email is set, only admins/coaches can view
+    # If no uploader email is set, only admins can view
     if not transcript_email:
         return False
     return transcript_email.lower() == user_email.lower()
 
 
-@st.cache_data(ttl=300)
 def get_transcript_statuses():
     """Get all transcript statuses in one API call"""
-    try:
-        # Create parameters to get all transcripts
-        params = aai.ListTranscriptParameters(
-            limit=100  # Adjust limit as needed
-        )
-        response = transcriber.list_transcripts(params)
+    # Check if we have cached statuses and they're not expired
 
-        # Create mapping of transcript ID to status
+    try:
         status_map = {}
-        for t in response.transcripts:
+        params = aai.ListTranscriptParameters(limit=100)  # Adjust limit as needed
+
+        # Get first page
+        page = transcriber.list_transcripts(params)
+        for t in page.transcripts:
             # Handle test data
             if t.id.startswith("test_"):
                 status_map[t.id] = "completed"
             else:
                 status_map[t.id] = t.status.value
 
-        # Get next page if available
-        while response.page_details.before_id_of_prev_url:
-            params.before_id = response.page_details.before_id_of_prev_url
-            response = transcriber.list_transcripts(params)
-            for t in response.transcripts:
+        # Paginate through all remaining pages
+        while page.page_details.before_id_of_prev_url is not None:
+            params.before_id = page.page_details.before_id_of_prev_url
+            page = transcriber.list_transcripts(params)
+            for t in page.transcripts:
                 if t.id.startswith("test_"):
                     status_map[t.id] = "completed"
                 else:
@@ -164,310 +285,333 @@ def get_transcript_statuses():
         return status_map
     except Exception as e:
         st.error(f"Error getting transcript statuses: {str(e)}")
+        # Return cached data if available, even if expired
         return {}
 
 
-@st.cache_data(ttl=300)
+def query_table_entities(table_client, user_email: str):
+    """
+    Query table entities based on user permissions.
+
+    Args:
+        table_client: Azure TableClient instance
+        user_email: Email of the current user
+
+    Returns:
+        List of entities the user has permission to view
+    """
+
+    if not user_email:
+        return []
+
+    try:
+        # For regular users, only fetch their items
+        if not is_admin(user_email):
+            if DEBUG:
+                st.info(
+                    f"Debug - User {user_email} is not admin, fetching only their items"
+                )
+            filter_condition = f"uploaderEmail eq '{user_email.lower()}'"
+            items = list(table_client.query_entities(filter_condition))
+        else:
+            if DEBUG:
+                st.info(f"Debug - User {user_email} is admin, fetching all items")
+            items = list_table_items(
+                st.session_state.get(
+                    "table_name", st.secrets.get("AZURE_STORAGE_TABLE_NAME")
+                )
+            )
+
+        if DEBUG:
+            st.info(f"Debug - Number of items fetched: {len(items) if items else 0}")
+        return items
+
+    except Exception as e:
+        logging.error(f"Error querying table: {e}")
+        if DEBUG:
+            st.error(f"Debug - Error querying table: {str(e)}")
+            st.write(f"Debug - Table client state: {table_client}")
+        return []
+
+
 def load_table_data(_table_client):
     """Load and process table data with caching"""
     MIN_DATE = datetime(2000, 1, 1, tzinfo=pytz.UTC)
 
-    if not user or not user.email:
-       st.login()
+    user = st.experimental_user
+    validated_email = user.email if user.email_verified else None
 
-    try:
-        # For regular users, only fetch their items
-        if not is_admin_or_coach(role):
-            filter_condition = f"uploaderEmail eq '{user.email.lower()}'"
-            items = list(table_client.query_entities(filter_condition))
+    if validated_email is not None:
+        # Use consolidated query function
+        items = query_table_entities(_table_client, str(validated_email))
+
+    if not items:
+        return []
+
+    # Get all transcript statuses at once
+    transcript_statuses = get_transcript_statuses()
+    items_list = []
+
+    for item in items:
+        item_dict = dict(item)
+
+        # Add formatted size
+        if "blobSize" in item_dict:
+            item_dict["formatted_size"] = format_file_size(item_dict["blobSize"])
+
+        # Get status from cached transcript statuses
+        if "transcriptId" in item_dict:
+            item_dict["status"] = transcript_statuses.get(
+                item_dict["transcriptId"], "error"
+            )
         else:
-            # Admins/coaches can see all items
-            items = list_table_items(_table_client)
+            item_dict["status"] = "pending"
 
-        if not items:
-            return []
+        item_dict["_previous_status"] = item_dict["status"]
 
-        # Get all transcript statuses at once
-        transcript_statuses = get_transcript_statuses()
-        items_list = []
+        # Process timestamp
+        if "uploadTime" not in item_dict:
+            item_dict["uploadTime"] = item_dict.get("Timestamp", MIN_DATE)
 
-        for item in items:
-            item_dict = dict(item)
-
-            # Get uploader email, defaulting to None if not present
-            uploader_email = item_dict.get("uploaderEmail")
-
-            # Only include items the user can view
-            if not can_view_transcript(uploader_email, user.email, role):
-                continue
-
-            # Add formatted size
-            if "blobSize" in item_dict:
-                item_dict["formatted_size"] = format_file_size(item_dict["blobSize"])
-
-            # Get status from cached transcript statuses
-            if "transcriptId" in item_dict:
-                item_dict["status"] = transcript_statuses.get(
-                    item_dict["transcriptId"], "error"
+        try:
+            # Handle different timestamp types
+            if isinstance(item_dict["uploadTime"], str):
+                dt = datetime.fromisoformat(
+                    item_dict["uploadTime"].replace("Z", "+00:00")
                 )
+            elif isinstance(item_dict["uploadTime"], datetime):
+                dt = item_dict["uploadTime"]
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=pytz.UTC)
             else:
-                item_dict["status"] = "pending"
+                dt = MIN_DATE
 
-            item_dict["_previous_status"] = item_dict["status"]
-
-            # Process timestamp
-            if "uploadTime" not in item_dict:
-                item_dict["uploadTime"] = item_dict.get("Timestamp", MIN_DATE)
-
-            try:
-                # Handle different timestamp types
-                if isinstance(item_dict["uploadTime"], str):
-                    dt = datetime.fromisoformat(
-                        item_dict["uploadTime"].replace("Z", "+00:00")
-                    )
-                elif isinstance(item_dict["uploadTime"], datetime):
-                    dt = item_dict["uploadTime"]
-                    if dt.tzinfo is None:
-                        dt = dt.replace(tzinfo=pytz.UTC)
-                else:
-                    dt = MIN_DATE
-
-                local_dt = dt.astimezone(local_tz)
-                item_dict["_timestamp"] = local_dt
-                item_dict["uploadTime"] = local_dt
-            except ValueError as e:
-                logging.error(f"Error parsing time: {e}")
-                item_dict["_timestamp"] = MIN_DATE
-                item_dict["uploadTime"] = MIN_DATE
+            local_dt = dt.astimezone(local_tz)
+            item_dict["_timestamp"] = local_dt
+            item_dict["uploadTime"] = local_dt
+        except ValueError as e:
+            logging.error(f"Error parsing time: {e}")
+            item_dict["_timestamp"] = MIN_DATE
+            item_dict["uploadTime"] = MIN_DATE
 
         # Add class name and description
-        item_dict["className"] = item_dict.get("className", "N/A")
-        item_dict["description"] = item_dict.get("description", "N/A")
+        item_dict["className"] = item_dict.get("className", None)
+        item_dict["description"] = item_dict.get("description", None)
 
         items_list.append(item_dict)
 
-        return items_list
-
-    except Exception as e:
-        logging.error(f"Error loading table data: {e}")
-        return []
-
-
-@st.cache_data(ttl=30)  # Cache for 30 seconds only for pending items
-def get_pending_transcript_statuses(transcript_ids):
-    """Get status updates for pending transcripts"""
-    if not transcript_ids:
-        return {}
-
-    status_map = {}
-    for transcript_id in transcript_ids:
-        try:
-            transcript = aai.Transcript.get_by_id(transcript_id)
-            status_map[transcript_id] = transcript.status.value
-        except Exception as e:
-            logging.error(f"Error getting status for {transcript_id}: {e}")
-            status_map[transcript_id] = "error"
-    return status_map
-
-
-def should_auto_refresh(items_list):
-    """Determine if we should auto-refresh based on pending items"""
-    pending_statuses = {"queued", "processing"}
-    # Only return True if there are actual pending items
-    has_pending = any(item.get("status") in pending_statuses for item in items_list)
-    # Add a timestamp check to prevent rapid refreshes
-    time_since_refresh = (
-        datetime.now(pytz.UTC) - st.session_state.last_refresh
-    ).total_seconds()
-    return has_pending and time_since_refresh >= 30
-
-
-def navigate_to_detail(transcript_id):
-    """Navigate to the detail view for a transcript"""
-    st.session_state.selected_transcript = transcript_id
-    st.query_params["id"] = transcript_id  # Use new API to set params
-    st.switch_page("src/transcript_detail_view.py")
+    return items_list
 
 
 def display_transcript_item(item):
     """Display a single transcript item in a fragment"""
-    # Get status info for formatting
-    status = item.get("status", "N/A")
-    status_color = {
-        "completed": "🟢",
-        "processing": "🟡",
-        "error": "🔴",
-        "failed": "🔴",
-        "queued": "⚪",
-    }.get(status, "⚪")
+    try:
+        transcript_id = item.get("transcriptId")
+        if not transcript_id:
+            st.error("Missing transcript ID")
+            return
 
-    # Format upload time
-    upload_time = item.get("uploadTime")
-    upload_time_str = (
-        upload_time.strftime("%Y-%m-%d %H:%M:%S") if upload_time else "N/A"
-    )
+        # Get status info for formatting
+        upload_time = item.get("uploadTime")
+        upload_time_str = localized_timestamp(upload_time)
+        original_file_name = item.get("originalFileName", "Untitled")
+        row_key = item.get("RowKey", "")
+        status = item.get("status")
+        class_name = item.get("className", "")
+        uploader_email = item.get("uploaderEmail", "Unknown")
 
-    with st.expander(f"📄 {item['RowKey']}", expanded=True):
-        # Header with key info
-        st.markdown(f"""
-        ### File Information
-        | Detail | Value |
-        |--------|-------|
-        | Size | {item.get("formatted_size", "N/A")} |
-        | Type | {item.get("blobContentType", "N/A")} |
-        | Uploaded | {upload_time_str} |
-        | Status | {status_color} {status.title()} |
-        | Transcript ID | `{item.get("transcriptId", "N/A")}` |
-        | Class Name | {item.get("className", "N/A")} |
-        | Description | {item.get("description", "N/A")} |
-        """)
+        # Choose icon based on status
+        status_icon = "📄"  # Default icon
+        if status in ["queued", "processing"]:
+            status_icon = "⏳"
+        elif status in ["error", "failed"]:
+            status_icon = "❌"
 
-        # Actions row
-        col1, col2, col3 = st.columns([1, 1, 2])
-        with col1:
-            if item.get("transcriptId"):
-                if st.button(
-                    "View Details",
-                    key=f"view_{item['transcriptId']}",
-                    type="primary",
-                ):
-                    navigate_to_detail(item["transcriptId"])
-        with col2:
-            if item.get("audioUrl"):
-                st.link_button("Download Audio", item["audioUrl"], type="secondary")
+        # Format display name - use class name if available, otherwise use original file name
+        display_name = class_name if class_name else original_file_name
 
-        st.divider()
+        # Format uploader email - show only the part before @ symbol
+        uploader_display = (
+            uploader_email.split("@")[0] if "@" in uploader_email else uploader_email
+        )
 
-        # Transcript preview with improved markdown
-        if item.get("status") == "completed" and item.get("transcriptId"):
-            try:
-                transcript = aai.Transcript.get_by_id(item["transcriptId"])
-                if transcript.text:
-                    st.markdown("#### 📝 Transcript Preview")
-                    preview_text = (
-                        transcript.text[:500] + "..."
-                        if len(transcript.text) > 500
-                        else transcript.text
+        # Format date to be more concise
+        date_display = (
+            upload_time.strftime("%Y-%m-%d")
+            if isinstance(upload_time, datetime)
+            else str(upload_time)
+        )
+
+        with st.expander(
+            f"{status_icon} {display_name} | by {uploader_display} | {date_display}",
+            expanded=False,
+        ):
+            description = item.get("description", "")
+            size = item.get("formatted_size", "")
+
+            if class_name:
+                st.write(f"**Class**: {class_name}")
+                st.write(f"**File**: {original_file_name}")
+            else:
+                st.write(f"**File**: {original_file_name}")
+
+            if description:
+                st.write(f"**Description**: {description}")
+            st.write(f"**Uploaded**: {upload_time_str}")
+            st.write(f"**Size**: {size}")
+
+            # Audio player
+            audio_url_with_sas = get_sas_url_for_audio_file_name(row_key)
+            if audio_url_with_sas:
+                st.audio(audio_url_with_sas)
+
+            # Only fetch full transcript details if status is completed and user expands the item
+            transcript = None
+            if status == "completed" and transcript_id:
+                try:
+                    transcript = aai.Transcript.get_by_id(transcript_id)
+                except pydantic.ValidationError as ve:
+                    st.warning(
+                        "Some transcript features may be limited due to API changes. Basic transcript text is still available."
                     )
-                    st.markdown(f">{preview_text}")
-                elif transcript.utterances:
-                    st.markdown("#### 📝 Transcript Preview")
-                    preview_utterances = transcript.utterances[
-                        :2
-                    ]  # Show first 2 utterances
-                    for utterance in preview_utterances:
-                        st.markdown(f"**{utterance.speaker}**  \n>{utterance.text}")
-                    if len(transcript.utterances) > 2:
-                        st.markdown("*... (click View Details to see full transcript)*")
-                else:
-                    st.info("No transcript content available")
-            except Exception as e:
-                st.warning("Could not load transcript preview")
-        elif item.get("status") == "processing":
-            st.markdown("""
-            #### ⏳ Processing
-            The transcript is still being generated. This typically takes 1-2 minutes.
-            """)
-        elif item.get("status") in ["error", "failed"]:
-            st.markdown("""
-            #### ❌ Error
-            There was a problem processing this transcript. Please try uploading the file again.
-            """)
+                    logging.warning(
+                        f"Validation error for transcript {transcript_id}: {str(ve)}"
+                    )
+                    try:
+                        transcript = aai.Transcript.get_by_id(transcript_id)
+                        if not hasattr(transcript, "text") or not transcript.text:
+                            transcript = None
+                    except Exception as e:
+                        logging.error(f"Error getting transcript data: {str(e)}")
+                        transcript = None
+                except Exception as e:
+                    st.error(f"Error loading transcript: {str(e)}")
+                    logging.error(
+                        f"Error loading transcript {transcript_id}: {str(e)}",
+                        exc_info=True,
+                    )
 
+                if DEBUG and transcript:
+                    # Good transcriptions have text and utterances
+                    if transcript.text and transcript.utterances:
+                        # Add download buttons in a row
+                        col1, col2 = st.columns([1, 1])
 
-def display_status_overview(items_list):
-    """Display status overview in a fragment"""
-    # Only count items the user has permission to see
-    viewable_items = [
-        item
-        for item in items_list
-        if can_view_transcript(item.get("uploaderEmail", ""), user.email, role)
-    ]
+                        with col1:
+                            # Create download button for markdown
+                            full_markdown = generate_transcript_markdown(transcript)
+                            st.download_button(
+                                label="Download as Markdown",
+                                data=full_markdown,
+                                file_name=f"{original_file_name}.md",
+                                mime="text/markdown",
+                                key=f"download_transcript_md_{row_key}",
+                            )
 
-    total_items = len(viewable_items)
-    completed_items = len([i for i in viewable_items if i.get("status") == "completed"])
-    processing_items = len(
-        [i for i in viewable_items if i.get("status") == "processing"]
-    )
-    error_items = len(
-        [i for i in viewable_items if i.get("status") in ["error", "failed"]]
-    )
+                        with col2:
+                            # Create download button for docx
+                            docx_bytes = generate_transcript_docx(transcript)
+                            st.download_button(
+                                label="Download as Word",
+                                data=docx_bytes,
+                                file_name=f"{original_file_name}.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                key=f"download_transcript_docx_{row_key}",
+                            )
 
-    st.subheader("📊 Overview")
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Total Files", total_items)
-    with col2:
-        st.metric("Completed", completed_items)
-    with col3:
-        st.metric("Processing", processing_items)
-    with col4:
-        st.metric("Errors", error_items)
+                        ### Show transcript
+                        st.markdown("#### 📝 Transcript")
+                        full_markdown = generate_transcript_markdown(transcript)
+                        st.markdown(full_markdown)
+
+                    elif transcript.text:
+                        st.info("AI failed to distinguish speakers.")
+
+                        # Add download buttons in a row
+                        col1, col2 = st.columns([1, 1])
+
+                        with col1:
+                            # Create download button for text
+                            st.download_button(
+                                label="Download as Text",
+                                data=transcript.text,
+                                file_name=f"{original_file_name}.txt",
+                                mime="text/plain",
+                                key=f"download_transcript_txt_{row_key}",
+                            )
+
+                        with col2:
+                            # Create download button for docx
+                            docx_bytes = generate_transcript_docx(transcript)
+                            st.download_button(
+                                label="Download as Word",
+                                data=docx_bytes,
+                                file_name=f"{original_file_name}.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                key=f"download_transcript_docx_no_speakers_{row_key}",
+                            )
+
+                        # Show full transcript
+                        st.markdown("#### 📝 Transcript")
+                        st.write(transcript.text)
+
+            elif status in ["queued", "processing"]:
+                with st.container(border=True):
+                    st.markdown(
+                        """
+                        #### ⏳ Processing
+                        The transcript is still being generated. This typically takes 1-2 minutes.
+                        """
+                    )
+                    if st.button(
+                        "Refresh Status",
+                        icon="🔄",
+                        key=f"refresh_status_body_{row_key}",
+                    ):
+                        st.rerun()
+
+            elif status in ["error", "failed"]:
+                with st.container(border=True):
+                    st.markdown(
+                        """
+                        #### ❌ Error
+                        There was a problem processing this transcript. Please try uploading the file again.
+                        """
+                    )
+
+    except pydantic.ValidationError:
+        # Handle case where transcript data is invalid/missing
+        st.error(
+            f"Could not load transcript {transcript_id} - the data may be corrupted or deleted"
+        )
+        logging.error(f"Failed to parse transcript data for ID: {transcript_id}")
+
+    except Exception as e:
+        # Handle any other errors including AssemblyAI API errors
+        st.error(f"Error loading transcript: {str(e)}")
+        logging.error(
+            f"Error loading transcript {transcript_id}: {str(e)}", exc_info=True
+        )
 
 
 def display_table_data():
     """Display the table data with progress indicators"""
-    user = st.experimental_user
-    with st.spinner("Loading transcripts..."):
-        items_list = load_table_data(table_client)
+    items_list = load_table_data(table_client)
 
     if not items_list:
         st.info("No files found in the system")
         return
 
-    # Sort by timestamp
+    # Sort by timestamp (newest first)
     items_list.sort(key=lambda x: x.get("_timestamp", datetime.min), reverse=True)
 
-    # Auto-refresh logic
-    if st.session_state.auto_refresh and should_auto_refresh(items_list):
-        time_since_refresh = (
-            datetime.now(pytz.UTC) - st.session_state.last_refresh
-        ).total_seconds()
-        if time_since_refresh >= 30:
-            st.session_state.last_refresh = datetime.now(pytz.UTC)
-            st.cache_data.clear()
-            st.rerun()
-
-    # Display status overview with already filtered list
-    with st.container():
-        display_status_overview(items_list)
-        st.divider()
-
-    # Filter controls
-    st.subheader("🔍 Transcripts")
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        status_filter = st.multiselect(
-            "Filter by Status",
-            options=st.session_state.transcription_statuses,
-            default=["completed"],
-            help="Select one or more statuses to filter",
-            on_change=reset_pagination,  # Reset pagination when filter changes
-        )
-    with col2:
-        sort_order = st.selectbox(
-            "Sort by",
-            options=["Newest First", "Oldest First"],
-            index=0,
-            on_change=reset_pagination,  # Reset pagination when sort changes
-        )
-
-    # Apply filters
-    filtered_items = [
-        item for item in items_list if item.get("status") in status_filter
-    ]
-
-    # Apply sorting
-    if sort_order == "Oldest First":
-        filtered_items.reverse()
-
     # Calculate pagination
-    total_items = len(filtered_items)
+    total_items = len(items_list)
     start_idx = 0
     end_idx = st.session_state.items_per_page
 
     # Display items in fragments
-    for item in filtered_items[start_idx:end_idx]:
+    for item in items_list[start_idx:end_idx]:
         with st.container():
             display_transcript_item(item)
 
@@ -485,37 +629,5 @@ def display_table_data():
     # Show total count
     st.caption(f"Showing {min(end_idx, total_items)} of {total_items} transcripts")
 
-    # Add refresh controls in a fragment
-    with st.container():
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            if st.button("Refresh Now", icon="🔄"):
-            if st.button("Refresh Now", icon="🔄"):
-                st.session_state.last_refresh = datetime.now(pytz.UTC)
-                st.cache_data.clear()
-                st.rerun()
-        with col2:
-            st.caption(
-                f"Last refresh: {st.session_state.last_refresh.astimezone(local_tz).strftime('%H:%M:%S')}"
-            )
 
-
-# Main execution
 display_table_data()
-
-
-def list_all_mappings():
-    connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
-    table_client = TableClient.from_connection_string(
-        connection_string, table_name="TranscriptMappings"
-    )
-
-    # For regular users, only fetch their mappings
-    if not is_admin_or_coach(role):
-        filter_condition = f"uploaderEmail eq '{user.email.lower()}'"
-        entities = table_client.query_entities(filter_condition)
-    else:
-        # Admins/coaches can see all mappings, including those without uploaderEmail
-        entities = table_client.list_entities()
-
-    return list(entities)

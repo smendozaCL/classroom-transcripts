@@ -1,19 +1,20 @@
-from shlex import quote
 import streamlit as st
 import assemblyai as aai
 import os
 import logging
 from azure.identity import ClientSecretCredential, DefaultAzureCredential
-from azure.storage.blob import BlobServiceClient, BlobSasPermissions
-from azure.data.tables import TableServiceClient, TableEntity
-from datetime import datetime, timedelta
+from azure.storage.blob import BlobServiceClient
+from datetime import datetime
 import asyncio
-from src.utils.transcript_mapping import create_upload_entity, update_transcript_status
-from src.utils.azure_storage import get_blob_sas_url
+from src.utils.transcript_mapping import create_upload_entity
 from urllib.parse import quote
 from src.utils.table_client import get_table_client
+from utils.azure_storage import get_sas_url_for_audio_file_name
 
-DEBUG = bool(os.getenv("DEBUG", False))
+DEBUG = bool(st.secrets.get("DEBUG", False))
+table_name = st.secrets.get("AZURE_STORAGE_TABLE_NAME", "TranscriptionMappings")
+st.session_state["table_name"] = table_name
+
 
 def get_azure_credential():
     """Get Azure credential using service principal."""
@@ -59,16 +60,6 @@ def get_azure_credential():
             raise ValueError(f"Failed to authenticate with Azure: {str(e)}")
 
 
-# Get storage account key from connection string
-def get_account_key_from_connection_string(connection_string: str) -> str:
-    """Extract account key from connection string."""
-    if not connection_string:
-        raise ValueError("Connection string is required")
-
-    parts = dict(part.split("=", 1) for part in connection_string.split(";") if part)
-    return parts.get("AccountKey")
-
-
 # Initialize variables for logging
 account_url = None
 uploads_container = "uploads"
@@ -81,14 +72,6 @@ try:
     # Get Azure credential
     credential = get_azure_credential()
     logging.debug("Successfully obtained Azure credential")
-
-    # Get storage account key from connection string
-    connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
-    if connection_string:
-        storage_account_key = get_account_key_from_connection_string(connection_string)
-        logging.debug(
-            "Successfully obtained storage account key from connection string"
-        )
 
     # Create BlobServiceClient
     storage_account = os.getenv("AZURE_STORAGE_ACCOUNT", "classroomtranscripts")
@@ -146,36 +129,6 @@ logging.debug("Azure Identity: Using service principal authentication")
 # Initialize AssemblyAI
 aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
 
-# Configure AssemblyAI transcription settings
-transcription_config = aai.TranscriptionConfig(
-    speaker_labels=True,  # Enable speaker diarization
-    speech_model=aai.SpeechModel.best,  # Use best speech model
-    iab_categories=True,  # Enable IAB categories
-    auto_chapters=True,  # Enable auto chapters
-    content_safety=True,  # Enable content safety
-    auto_highlights=True,  # Enable auto highlights
-    sentiment_analysis=True,  # Enable sentiment analysis
-    filter_profanity=True,  # Filter profanity
-    language_detection=False,  # Disable language detection
-    language_code="en",  # Set language to English
-).set_redact_pii(
-    policies=[  # Redact PII
-        # Occupation was not redacted because it's a common topic in the classroom
-        aai.PIIRedactionPolicy.medical_condition,
-        aai.PIIRedactionPolicy.email_address,
-        aai.PIIRedactionPolicy.phone_number,
-        aai.PIIRedactionPolicy.banking_information,
-        aai.PIIRedactionPolicy.credit_card_number,
-        aai.PIIRedactionPolicy.credit_card_cvv,
-        aai.PIIRedactionPolicy.date_of_birth,
-        aai.PIIRedactionPolicy.person_name,
-        aai.PIIRedactionPolicy.organization,
-        aai.PIIRedactionPolicy.location,
-    ],
-    redact_audio=True,
-    substitution=aai.PIISubstitutionPolicy.hash,
-)
-
 
 st.title("🎤 Classroom Transcripts")
 if org_name := os.getenv("ORGANIZATION_NAME"):
@@ -209,7 +162,7 @@ def upload_to_azure(file):
         # Upload as block blob
         file.seek(0)
         try:
-            blob = blob_client.upload_blob(
+            blob_client.upload_blob(
                 file,
                 overwrite=False,  # No need for overwrite with unique names
             )
@@ -240,13 +193,12 @@ def upload_to_azure(file):
         return False
 
 
-async def submit_transcription(url: str) -> dict:
+async def submit_transcription(url: str, config: aai.TranscriptionConfig) -> dict:
     try:
         # Get the callback URL from environment
         callback_url = os.getenv("ASSEMBLYAI_CALLBACK_URL")
 
         # Configure transcription with webhook if available
-        config = transcription_config
         if callback_url:
             config = config.set_webhook(callback_url)
             logging.info(f"Using callback URL: {callback_url}")
@@ -268,8 +220,7 @@ async def store_mapping_in_table(
 ):
     """Store the mapping between uploaded file and its transcript."""
     try:
-        table_client = get_table_client()
-
+        table_client = get_table_client(table_name)
         # Get user information
         user = st.experimental_user
 
@@ -303,8 +254,28 @@ async def store_mapping_in_table(
         raise
 
 
-def handle_successful_upload(upload_result, transcript):
-    """Handle successful upload and transcription submission"""
+def handle_successful_upload(
+    upload_result: dict, transcript: dict, class_name: str
+) -> None:
+    """Handle successful upload and transcription submission.
+
+    Args:
+        upload_result: Dictionary containing upload details (name, original_name, size)
+        transcript: Dictionary containing transcript details (id)
+        class_name: Name of the class for the recording
+    """
+    # Validate required keys
+    required_keys = {"name", "original_name", "size"}
+    if not all(key in upload_result for key in required_keys):
+        logging.error(f"Missing required keys in upload_result: {upload_result}")
+        st.error("Invalid upload result format")
+        return
+
+    if "id" not in transcript:
+        logging.error(f"Missing id in transcript result: {transcript}")
+        st.error("Invalid transcript format")
+        return
+
     # Store the upload info in session state
     if "recent_uploads" not in st.session_state:
         st.session_state.recent_uploads = []
@@ -380,28 +351,91 @@ if st.experimental_user.get("is_logged_in"):
         # Get filename without extension for default class name
         default_class_name = os.path.splitext(uploaded_file.name)[0]
 
-        # Show form after file is selected
-        with st.form("upload_details"):
+        # Initialize session state
+        if "speaker_count" not in st.session_state:
+            st.session_state.speaker_count = 2
+        if "use_speaker_count" not in st.session_state:
+            st.session_state.use_speaker_count = True
+        if "description" not in st.session_state:
+            st.session_state.description = ""
+
+        # Create a container with a border for the form-like interface
+        with st.container(border=True):
             st.write("### Add Details")
-            class_name = st.text_input("Class Name", value=default_class_name)
-            description = st.text_area(
+
+            # Class name input
+            st.session_state.class_name = st.text_input(
+                "Class Name", key="class_name_input", value=default_class_name
+            )
+
+            # Speaker settings section
+            st.toggle(
+                "Set expected number of speakers",
+                value=st.session_state.use_speaker_count,
+                key="use_speaker_count",
+                help="""If you know how many speakers are in the recording, 
+                set the expected number of speakers. The default is 2, which will
+                work for most recordings, with Speaker A being teacher and Speaker B being any student.""",
+            )
+
+            if st.session_state.use_speaker_count:
+                st.slider(
+                    "Expected Number of Speakers",
+                    min_value=1,
+                    max_value=10,
+                    value=st.session_state.speaker_count,
+                    key="speaker_count",
+                    help="Estimate how many different speakers are in this recording",
+                )
+
+            # Description input
+            st.text_area(
                 "Description (optional)",
-                value="",
+                value=st.session_state.description,
+                key="description",
                 help="Optional: Add any notes about this recording that might be helpful for your coach.",
             )
 
-            submit_button = st.form_submit_button("Submit")
-
-            if submit_button:
-                if not class_name.strip():
+            # Submit button
+            if st.button("Submit", type="primary", use_container_width=True):
+                if not st.session_state.class_name:
                     st.error("Please enter a class name")
                 else:
                     if upload_result := upload_to_azure(uploaded_file):
-                        blob_sas_url = get_blob_sas_url(
-                            blob_name=upload_result["name"],
-                            container_name=uploads_container,
-                            storage_account=storage_account,
-                            storage_account_key=storage_account_key,
+                        blob_sas_url = get_sas_url_for_audio_file_name(
+                            upload_result["name"]
+                        )
+
+                        # Create new config with selected speaker count
+                        config = aai.TranscriptionConfig(
+                            speaker_labels=True,
+                            speakers_expected=st.session_state.speaker_count
+                            if st.session_state.use_speaker_count
+                            else None,
+                            speech_model=aai.SpeechModel.best,
+                            iab_categories=True,
+                            auto_chapters=True,
+                            content_safety=True,
+                            auto_highlights=False,
+                            sentiment_analysis=True,
+                            filter_profanity=True,
+                            language_detection=False,
+                            language_code="en",
+                        ).set_redact_pii(
+                            policies=[
+                                aai.PIIRedactionPolicy.medical_condition,
+                                aai.PIIRedactionPolicy.email_address,
+                                aai.PIIRedactionPolicy.phone_number,
+                                aai.PIIRedactionPolicy.banking_information,
+                                aai.PIIRedactionPolicy.credit_card_number,
+                                aai.PIIRedactionPolicy.credit_card_cvv,
+                                aai.PIIRedactionPolicy.date_of_birth,
+                                aai.PIIRedactionPolicy.person_name,
+                                aai.PIIRedactionPolicy.organization,
+                                aai.PIIRedactionPolicy.location,
+                            ],
+                            redact_audio=True,
+                            substitution=aai.PIISubstitutionPolicy.hash,
                         )
 
                         safe_url = quote(blob_sas_url, safe=":/?&=%")
@@ -410,17 +444,22 @@ if st.experimental_user.get("is_logged_in"):
                         )
                         st.success(f"Uploaded file to Azure: {markdown_link}")
 
-                        transcript = asyncio.run(submit_transcription(safe_url))
+                        transcript = asyncio.run(submit_transcription(safe_url, config))
                         if transcript["status"] == "queued":
                             # Store mapping in table
                             asyncio.run(
                                 store_mapping_in_table(
-                                    upload_result, transcript, class_name, description
+                                    upload_result,
+                                    transcript,
+                                    st.session_state.class_name,
+                                    st.session_state.description,
                                 )
                             )
 
-                            # Use the new handler function instead of directly clearing cache
-                            handle_successful_upload(upload_result, transcript)
+                            # Pass class_name to the handler function
+                            handle_successful_upload(
+                                upload_result, transcript, st.session_state.class_name
+                            )
 
                         else:
                             st.error(
@@ -442,7 +481,5 @@ else:
         st.login()
 
 
-
 if feedback_email := os.getenv("FEEDBACK_EMAIL"):
     st.caption(f"📧 Help and feedback: {feedback_email}")
-
